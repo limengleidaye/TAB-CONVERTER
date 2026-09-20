@@ -5,5 +5,8 @@ out/
 *.local
 .DS_Store
 
-# Claude Code 的个人本地设置，不随仓库分发
-.claude/settings.local.json
+# Claude Code 本地目录
+.claude/
+
+# 原谱参照图：第三方制谱作品，本地保留、不随仓库分发
+*示例输出图片.png
