@@ -13,19 +13,46 @@ export function validate(score: Score): Issue[] {
   // 一拍 = 一个 unit 音符；以四分音符为 1 的内部时值需要换算
   const beatsPerMeasure = 拍号.beats * (4 / 拍号.unit)
 
+  /**
+   * 拍数校验（§4.1）。豁免规则分两个方向——早先一刀切地放过首尾小节，
+   * 结果把末小节里真正的笔误也一起咽了：
+   *
+   * - **超出**：永远警告，不豁免。弱起、引子、收尾都只会「少拍」，
+   *   多出来的拍数一定是写错了。
+   * - **不足**：首小节豁免（弱起 / 引子）。末小节只在**确有弱起**时豁免，
+   *   因为收尾少的那部分正是开头借走的；开头是满拍却在结尾少拍，多半是漏音。
+   */
+  const total = score.measures.length
+  const firstBeats = score.measures[0]?.beats ?? 0
+  const hasPickup = total > 1 && firstBeats < beatsPerMeasure - 1e-6
+
   score.measures.forEach((m, i) => {
+    const diff = m.beats - beatsPerMeasure
+    if (Math.abs(diff) <= 1e-6) return
+
     const isFirst = i === 0
-    const isLast = i === score.measures.length - 1
-    // 首尾小节允许不完整（弱起 / 引子 / 收尾），默认不提示（§3.10）
-    if (isFirst || isLast) return
-    if (Math.abs(m.beats - beatsPerMeasure) > 1e-6) {
+    const isLast = total > 1 && i === total - 1
+
+    if (diff > 0) {
       issues.push({
         severity: 'warning',
-        message: `第 ${m.index} 小节拍数为 ${fmt(m.beats)}，应为 ${fmt(beatsPerMeasure)}`,
+        message: `第 ${m.index} 小节拍数为 ${fmt(m.beats)}，超出拍号 ${fmt(diff)} 拍`,
         span: m.span,
         measureIndex: m.index,
       })
+      return
     }
+
+    if (isFirst) return
+    if (isLast && hasPickup) return
+
+    const why = isLast ? '；开头不是弱起，结尾通常应当满拍' : ''
+    issues.push({
+      severity: 'warning',
+      message: `第 ${m.index} 小节拍数为 ${fmt(m.beats)}，应为 ${fmt(beatsPerMeasure)}${why}`,
+      span: m.span,
+      measureIndex: m.index,
+    })
   })
 
   // 音域校验：查表 index 越界

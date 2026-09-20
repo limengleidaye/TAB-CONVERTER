@@ -240,9 +240,40 @@ describe('校验', () => {
     )
   })
 
-  it('首尾小节不完整不提示', () => {
+  it('弱起：首小节不足 + 末小节不足，都不提示', () => {
     const r = compile(HEAD + '1 2 | 1 2 3 4 | 1 2 |')
     expect(r.issues.filter((i) => i.message.includes('小节拍数'))).toHaveLength(0)
+  })
+
+  it('超出拍号一律警告，首尾也不豁免', () => {
+    const first = compile(HEAD + '1 2 3 4 5 | 1 2 3 4 |')
+    expect(first.issues.some((i) => i.message.includes('第 1 小节拍数为 5，超出拍号 1 拍'))).toBe(true)
+
+    const last = compile(HEAD + '1 2 3 4 | 5 3 2 1 1 - - - ||')
+    expect(last.issues.some((i) => i.message.includes('第 2 小节拍数为 8，超出拍号 4 拍'))).toBe(true)
+  })
+
+  it('开头不是弱起时，末小节不足也要警告', () => {
+    const r = compile(HEAD + '1 2 3 4 | 1 2 3 4 | 5 2 1 ||')
+    const w = r.issues.find((i) => i.message.includes('第 3 小节'))
+    expect(w?.message).toContain('应为 4')
+    expect(w?.message).toContain('开头不是弱起')
+  })
+
+  it('有弱起时，末小节不足不提示', () => {
+    const r = compile(HEAD + '1 | 1 2 3 4 | 5 2 1 ||')
+    expect(r.issues.filter((i) => i.message.includes('小节拍数'))).toHaveLength(0)
+  })
+
+  it('单小节乐谱：少拍豁免，多拍照样警告', () => {
+    expect(compile(HEAD + '1 2 |').issues.filter((i) => i.message.includes('小节拍数'))).toHaveLength(0)
+    expect(compile(HEAD + '1 2 3 4 5 |').issues.some((i) => i.message.includes('超出拍号'))).toBe(true)
+  })
+
+  it('标黄的小节号跟着警告走', () => {
+    const r = compile(HEAD + '1 2 3 4 | 1 2 3 4 | 5 2 1 ||')
+    expect(r.warnMeasures.has(3)).toBe(true)
+    expect(r.warnMeasures.has(1)).toBe(false)
   })
 
   it('调号与箫调+筒音作不符时告警', () => {
