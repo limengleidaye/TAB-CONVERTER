@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 
 import { ExportDialog } from './components/ExportDialog'
 import { HeaderForm } from './components/HeaderForm'
+import { TutorialDialog } from './components/TutorialDialog'
 import { buildDsl, splitDsl, type HeaderKey } from './core/dsl'
 import { deriveKeySignature } from './core/fingering/derive'
 import type { AmbiguousPolicy } from './core/fingering/table'
@@ -12,11 +13,31 @@ import { SAMPLES } from './samples'
 
 const INITIAL = splitDsl(SAMPLES[0].dsl)
 
+/** 首次打开自动弹教程；localStorage 在隐私模式下会抛错，一律兜住 */
+const TUTORIAL_SEEN_KEY = 'xiao-tab:tutorial-seen'
+
+function readTutorialSeen(): boolean {
+  try {
+    return localStorage.getItem(TUTORIAL_SEEN_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function markTutorialSeen(): void {
+  try {
+    localStorage.setItem(TUTORIAL_SEEN_KEY, '1')
+  } catch {
+    /* 读不到就每次都弹，不影响使用 */
+  }
+}
+
 export default function App() {
   const [fields, setFields] = useState(INITIAL.fields)
   const [body, setBody] = useState(INITIAL.body)
   const [policy, setPolicy] = useState<AmbiguousPolicy>('闭')
 
+  const [tutorialOpen, setTutorialOpen] = useState(() => !readTutorialSeen())
   const [dialogOpen, setDialogOpen] = useState(false)
   const [watermark, setWatermark] = useState('')
   const [busy, setBusy] = useState(false)
@@ -43,6 +64,11 @@ export default function App() {
     const parts = splitDsl(s.dsl)
     setFields(parts.fields)
     setBody(parts.body)
+  }, [])
+
+  const closeTutorial = useCallback(() => {
+    setTutorialOpen(false)
+    markTutorialSeen()
   }, [])
 
   const closeDialog = useCallback(() => {
@@ -94,6 +120,7 @@ export default function App() {
               <option value="开">渲染成开</option>
             </select>
           </label>
+          <button onClick={() => setTutorialOpen(true)}>说明</button>
           <button className="primary" onClick={() => setDialogOpen(true)} disabled={!canExport}>
             导出…
           </button>
@@ -141,6 +168,8 @@ export default function App() {
           )}
         </section>
       </main>
+
+      {tutorialOpen ? <TutorialDialog onClose={closeTutorial} /> : null}
 
       {dialogOpen && result.layout ? (
         <ExportDialog

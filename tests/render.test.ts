@@ -1,6 +1,9 @@
+import { Fragment, createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
 import { resolveHole, HOLE } from '../src/core/fingering/table'
+import { ScoreSvg } from '../src/render/ScoreSvg'
 import { M } from '../src/core/layout'
 import { compile } from '../src/core/pipeline'
 import { renderPageSvg } from '../src/export/exporters'
@@ -31,7 +34,7 @@ describe('孔位图标', () => {
   it('按住的孔画成熊猫图章，数量与指法表对得上', () => {
     const svg = svgOf(落了白)
     const closed = drawnHoles(落了白).filter((h) => h.state === HOLE.CLOSED).length
-    const filled = svg.match(/fill="url\(#hole-panda\)"/g) ?? []
+    const filled = svg.match(/fill="url\(#hole-panda-[^)]+\)"/g) ?? []
     expect(closed).toBeGreaterThan(0)
     expect(filled).toHaveLength(closed)
   })
@@ -55,13 +58,32 @@ describe('孔位图标', () => {
   it('半孔的裁剪定义存在且按自身包围盒裁一半', () => {
     const svg = svgOf(落了白)
     expect(svg).toContain('clipPathUnits="objectBoundingBox"')
-    expect(svg).toMatch(/<clipPath id="hole-half-left"/)
+    expect(svg).toMatch(/<clipPath id="hole-half-[^"]+"/)
+  })
+
+  it('同一棵树里挂多张 svg 时，defs id 互不相同', () => {
+    // 教程弹窗就是这个场景：十几张片段 svg 和主预览同处一个文档，
+    // url(#id) 是全文档解析的，id 撞了就会互相串用定义。
+    const a = compile(落了白)
+    const b = compile(为爱追寻)
+    const tree = renderToStaticMarkup(
+      createElement(
+        Fragment,
+        null,
+        createElement(ScoreSvg, { key: 'a', score: a.score!, layout: a.layout!, pageIndex: 0 }),
+        createElement(ScoreSvg, { key: 'b', score: b.score!, layout: b.layout!, pageIndex: 0 }),
+      ),
+    )
+    const ids = [...tree.matchAll(/<pattern\s+id="([^"]+)"/g)].map((m) => m[1])
+    expect(ids).toHaveLength(2)
+    expect(new Set(ids).size).toBe(2)
+    for (const id of ids) expect(tree).toContain(`url(#${id})`)
   })
 
   it('没有半孔的曲子不会出现半孔裁剪引用', () => {
     const halves = drawnHoles(落了白).filter((h) => h.state === HOLE.HALF)
     expect(halves).toHaveLength(0)
-    expect(svgOf(落了白)).not.toContain('clip-path="url(#hole-half-left)"')
+    expect(svgOf(落了白)).not.toMatch(/clip-path="url\(#hole-half-/)
   })
 })
 

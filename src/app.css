@@ -291,3 +291,194 @@ button.primary:hover:not(:disabled) {
   gap: 10px;
   margin-top: 18px;
 }
+
+/* ---- 教程弹窗 ---- */
+
+.modal-tutorial {
+  width: min(980px, 94vw);
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
+
+.tut-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px 12px;
+  border-bottom: 1px solid #eee;
+  flex: 0 0 auto;
+}
+
+.tut-head h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.tut-head button {
+  border: none;
+  background: none;
+  font-size: 16px;
+  color: #888;
+  padding: 2px 6px;
+}
+
+.tut-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px 24px;
+  border-bottom: 1px solid #eee;
+  background: #fafafa;
+  flex: 0 0 auto;
+}
+
+.tut-nav button {
+  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 12px;
+  color: #555;
+}
+
+.tut-body {
+  overflow-y: auto;
+  padding: 4px 24px 8px;
+  flex: 1 1 auto;
+  scroll-behavior: smooth;
+}
+
+.tut-section {
+  padding: 18px 0;
+  border-bottom: 1px solid #f0f0f0;
+  scroll-margin-top: 8px;
+}
+
+.tut-section:last-of-type {
+  border-bottom: none;
+}
+
+.tut-section h3 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.tut-section p {
+  margin: 0 0 12px;
+  line-height: 1.85;
+  color: #333;
+  font-size: 13.5px;
+}
+
+.tut-section code {
+  font-family: "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  background: #f1f1ef;
+  border-radius: 3px;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+.tut-table {
+  border-collapse: collapse;
+  margin: 0 0 14px;
+  width: 100%;
+  font-size: 13px;
+}
+
+.tut-table th,
+.tut-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 5px 10px 5px 0;
+  border-bottom: 1px solid #f2f2f2;
+}
+
+.tut-table th {
+  width: 190px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.tut-table td {
+  color: #444;
+  line-height: 1.7;
+}
+
+.tut-example {
+  margin: 0 0 16px;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.tut-code {
+  margin: 0;
+  padding: 10px 14px;
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+  font-family: "JetBrains Mono", Menlo, Consolas, "Noto Sans Mono CJK SC", monospace;
+  font-size: 12.5px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #24292f;
+}
+
+.snippet-render {
+  padding: 8px 12px;
+  overflow-x: auto;
+}
+
+.snippet-render svg {
+  max-width: 100%;
+  height: auto;
+}
+
+.snippet-error {
+  padding: 12px;
+  color: #c0392b;
+  font-size: 12.5px;
+}
+
+.tut-example figcaption {
+  padding: 7px 14px;
+  border-top: 1px solid #f4f4f4;
+  color: #888;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.tut-note {
+  background: #fbfaf5;
+  border-left: 3px solid #e8d9a8;
+  padding: 9px 13px;
+  border-radius: 0 4px 4px 0;
+  font-size: 13px !important;
+  color: #5a5442 !important;
+  margin-bottom: 0 !important;
+}
+
+.tut-err {
+  color: #c0392b;
+}
+
+.tut-warn {
+  color: #b8860b;
+}
+
+.tut-footer {
+  padding: 16px 0 6px;
+  color: #999;
+  font-size: 12.5px;
+  text-align: center;
+}
+
+.modal-tutorial .modal-actions {
+  margin: 0;
+  padding: 12px 24px 16px;
+  border-top: 1px solid #eee;
+  flex: 0 0 auto;
+}

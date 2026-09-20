@@ -5,7 +5,7 @@
  * 否则减时线多一条、低音点多一个就会压到下一行。
  */
 
-import { Fragment, createContext, useContext } from 'react'
+import { Fragment, createContext, useContext, useId } from 'react'
 import { HOLE, resolveHole, type AmbiguousPolicy } from '../core/fingering/table'
 import {
   M,
@@ -13,6 +13,7 @@ import {
   type BeamSeg,
   type Bands,
   type LaidMeasure,
+  type Page,
   type LaidNote,
   type Layout,
   type System,
@@ -49,6 +50,27 @@ const FALLBACK_BANDS: Bands = {
 const BandsContext = createContext<Bands>(FALLBACK_BANDS)
 const useBands = () => useContext(BandsContext)
 
+/**
+ * <defs> 里的 id 按 svg 实例取唯一值。
+ * 教程弹窗里会同时挂十几张片段 svg，固定 id 会在同一文档里重复，
+ * 而 url(#id) 是全文档解析的——重复 id 属于未定义行为，别赌它。
+ */
+interface DefsIds {
+  panda: string
+  halfClip: string
+}
+const DefsContext = createContext<DefsIds>({ panda: 'hole-panda', halfClip: 'hole-half-left' })
+const useDefsIds = () => useContext(DefsContext)
+
+/**
+ * 片段模式：教程里的小例子用。去掉谱头/页脚/水印，viewBox 裁到第一行谱，
+ * 这样示例图和正式输出走的是同一套渲染代码，不会出现「文档和实现对不上」。
+ */
+export interface SnippetOptions {
+  /** 只讲节奏的例子可以关掉洞洞谱，省得一屏塞不下 */
+  hideFingering?: boolean
+}
+
 export interface ScoreSvgProps {
   score: Score
   layout: Layout
@@ -57,6 +79,7 @@ export interface ScoreSvgProps {
   ambiguousPolicy?: AmbiguousPolicy
   /** 需要标黄的小节号 */
   warnMeasures?: Set<number>
+  snippet?: SnippetOptions
 }
 
 export function ScoreSvg({
@@ -66,17 +89,25 @@ export function ScoreSvg({
   watermark,
   ambiguousPolicy = '闭',
   warnMeasures,
+  snippet,
 }: ScoreSvgProps) {
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, '')
+  const ids: DefsIds = { panda: `hole-panda-${uid}`, halfClip: `hole-half-${uid}` }
+
   const page = layout.pages[pageIndex]
   if (!page) return null
 
+  const view = snippet ? snippetViewBox(page, layout, snippet) : null
+  const vb = view ?? { x: 0, y: 0, w: M.pageW, h: M.pageH }
+
   return (
     <BandsContext.Provider value={layout.bands}>
+     <DefsContext.Provider value={ids}>
       <svg
         xmlns="http://www.w3.org/2000/svg"
-        viewBox={`0 0 ${M.pageW} ${M.pageH}`}
-        width={M.pageW}
-        height={M.pageH}
+        viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
+        width={vb.w}
+        height={vb.h}
         style={{ background: COLORS.paper, maxWidth: '100%', height: 'auto', display: 'block' }}
       >
         <defs>
@@ -86,7 +117,7 @@ export function ScoreSvg({
             patternContentUnits=objectBoundingBox 让图按引用它的圆自动缩放。
           */}
           <pattern
-            id={PANDA_PATTERN_ID}
+            id={ids.panda}
             patternUnits="objectBoundingBox"
             patternContentUnits="objectBoundingBox"
             width={1}
@@ -96,30 +127,51 @@ export function ScoreSvg({
           </pattern>
 
           {/* objectBoundingBox：按元素自身包围盒裁一半，与它画在哪无关 */}
-          <clipPath id={HALF_CLIP_ID} clipPathUnits="objectBoundingBox">
+          <clipPath id={ids.halfClip} clipPathUnits="objectBoundingBox">
             <rect x={0} y={0} width={0.5} height={1} />
           </clipPath>
         </defs>
 
-        <rect x={0} y={0} width={M.pageW} height={M.pageH} fill={COLORS.paper} />
-        {watermark ? <Watermark text={watermark} /> : null}
+        <rect x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill={COLORS.paper} />
+        {watermark && !snippet ? <Watermark text={watermark} /> : null}
 
-        {pageIndex === 0 ? <HeaderBlock score={score} keySignature={layout.keySignature} /> : null}
+        {pageIndex === 0 && !snippet ? (
+          <HeaderBlock score={score} keySignature={layout.keySignature} />
+        ) : null}
 
-        {page.systems.map((sys, i) => (
+        {(snippet ? page.systems.slice(0, 1) : page.systems).map((sys, i) => (
           <SystemView
             key={i}
             system={sys}
             hasLyrics={layout.hasLyrics}
             ambiguousPolicy={ambiguousPolicy}
             warnMeasures={warnMeasures}
+            hideFingering={snippet?.hideFingering ?? false}
           />
         ))}
 
-        <Footer title={score.header.标题} pageIndex={pageIndex} pageCount={layout.pages.length} />
+        {snippet ? null : (
+          <Footer title={score.header.标题} pageIndex={pageIndex} pageCount={layout.pages.length} />
+        )}
       </svg>
+     </DefsContext.Provider>
     </BandsContext.Provider>
   )
+}
+
+/** 片段模式的裁剪框：贴着第一行谱的实际内容，左右各留一点边 */
+function snippetViewBox(page: Page, layout: Layout, opts: SnippetOptions) {
+  const sys = page.systems[0]
+  if (!sys) return null
+  const padX = 10
+  const padY = 6
+  const bottom = opts.hideFingering ? layout.bands.lyricBaseline + 6 : layout.bands.fingerH + layout.bands.fingeringTop
+  return {
+    x: M.marginX - padX,
+    y: sys.y,
+    w: sys.width + padX * 2,
+    h: bottom + padY,
+  }
 }
 
 /* ---------------- 谱头 / 页脚 / 水印 ---------------- */
@@ -229,11 +281,13 @@ function SystemView({
   hasLyrics,
   ambiguousPolicy,
   warnMeasures,
+  hideFingering,
 }: {
   system: System
   hasLyrics: boolean
   ambiguousPolicy: AmbiguousPolicy
   warnMeasures?: Set<number>
+  hideFingering: boolean
 }) {
   return (
     <g transform={`translate(0 ${system.y})`}>
@@ -244,6 +298,7 @@ function SystemView({
           hasLyrics={hasLyrics}
           ambiguousPolicy={ambiguousPolicy}
           warn={warnMeasures?.has(lm.measure.index) ?? false}
+          hideFingering={hideFingering}
         />
       ))}
       {system.beams.map((b, i) => (
@@ -264,11 +319,13 @@ function MeasureView({
   hasLyrics,
   ambiguousPolicy,
   warn,
+  hideFingering,
 }: {
   lm: LaidMeasure
   hasLyrics: boolean
   ambiguousPolicy: AmbiguousPolicy
   warn: boolean
+  hideFingering: boolean
 }) {
   const bands = useBands()
   const m = lm.measure
@@ -335,7 +392,7 @@ function MeasureView({
               {ln.ev.lyric}
             </text>
           ) : null}
-          {ln.showFingering && ln.fingering?.holes ? (
+          {!hideFingering && ln.showFingering && ln.fingering?.holes ? (
             <FingeringColumn
               x={ln.x}
               top={bands.fingeringTop}
@@ -674,11 +731,9 @@ function FingeringColumn({
   return <g>{parts}</g>
 }
 
-const HALF_CLIP_ID = 'hole-half-left'
-const PANDA_PATTERN_ID = 'hole-panda'
-
 /** 按住 = 熊猫圆章（与原图一致）；半孔 = 只露左半个熊猫 */
 function HoleGlyph({ cx, cy, state }: { cx: number; cy: number; state: number }) {
+  const ids = useDefsIds()
   const r = M.holeR
 
   if (state === HOLE.OPEN) {
@@ -686,14 +741,14 @@ function HoleGlyph({ cx, cy, state }: { cx: number; cy: number; state: number })
   }
 
   if (state === HOLE.CLOSED) {
-    return <circle cx={cx} cy={cy} r={r} fill={`url(#${PANDA_PATTERN_ID})`} />
+    return <circle cx={cx} cy={cy} r={r} fill={`url(#${ids.panda})`} />
   }
 
   // 半孔：白底圆 + 左半个熊猫 + 一圈描边
   return (
     <g>
       <circle cx={cx} cy={cy} r={r} fill={COLORS.holeOpen} />
-      <circle cx={cx} cy={cy} r={r} fill={`url(#${PANDA_PATTERN_ID})`} clipPath={`url(#${HALF_CLIP_ID})`} />
+      <circle cx={cx} cy={cy} r={r} fill={`url(#${ids.panda})`} clipPath={`url(#${ids.halfClip})`} />
       <circle cx={cx} cy={cy} r={r} fill="none" stroke={COLORS.ink} strokeWidth={0.9} />
     </g>
   )
