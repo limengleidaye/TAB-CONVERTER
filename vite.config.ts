@@ -7,4 +7,5 @@ export default defineConfig({
     globals: true,
     environment: 'node',
   },
+  base:'/TAB-CONVERTER/',
 } as never)
