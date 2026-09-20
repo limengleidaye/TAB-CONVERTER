@@ -2,6 +2,16 @@
   "name": "flute-tab-converter",
   "private": true,
   "version": "0.1.0",
+  "description": "用文本写谱，自动排版成简谱 + 八孔箫洞洞谱，导出带水印的 PNG / SVG / PDF",
+  "keywords": [
+    "简谱",
+    "洞洞谱",
+    "箫",
+    "xiao",
+    "numbered-musical-notation",
+    "music-notation",
+    "svg"
+  ],
   "type": "module",
   "scripts": {
     "dev": "vite",

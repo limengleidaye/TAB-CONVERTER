@@ -4,3 +4,6 @@ out/
 *.tsbuildinfo
 *.local
 .DS_Store
+
+# Claude Code 的个人本地设置，不随仓库分发
+.claude/settings.local.json
