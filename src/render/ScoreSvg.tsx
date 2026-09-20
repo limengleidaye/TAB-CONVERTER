@@ -19,6 +19,7 @@ import {
   type TupletSeg,
 } from '../core/layout'
 import type { NoteEvent, Score } from '../core/types'
+import { PANDA_HOLE_PNG } from './panda'
 
 export const COLORS = {
   ink: '#1a1a1a',
@@ -76,6 +77,13 @@ export function ScoreSvg({
         height={M.pageH}
         style={{ background: COLORS.paper, maxWidth: '100%', height: 'auto', display: 'block' }}
       >
+        <defs>
+          {/* objectBoundingBox：按元素自身包围盒裁一半，与它画在哪无关 */}
+          <clipPath id={HALF_CLIP_ID} clipPathUnits="objectBoundingBox">
+            <rect x={0} y={0} width={0.5} height={1} />
+          </clipPath>
+        </defs>
+
         <rect x={0} y={0} width={M.pageW} height={M.pageH} fill={COLORS.paper} />
         {watermark ? <Watermark text={watermark} /> : null}
 
@@ -558,6 +566,16 @@ const SEGMENTS: number[][] = [
   [7],
 ]
 
+/**
+ * 第八孔（最上）与第一孔（最下）在原图里是向左错开画的，用来标出这两个孔的特殊；
+ * 中间六个孔居中。holeIdx 0 = 第八孔，7 = 第一孔。
+ */
+const EDGE_HOLES = new Set([0, 7])
+
+function holeCenterX(x: number, holeIdx: number): number {
+  return EDGE_HOLES.has(holeIdx) ? x - M.edgeHoleShift : x
+}
+
 function FingeringColumn({
   x,
   top,
@@ -615,7 +633,14 @@ function FingeringColumn({
 
     seg.forEach((holeIdx, hi) => {
       const cy = y + labelH + hi * M.fingerCellH + M.fingerCellH / 2
-      parts.push(<HoleGlyph key={`h-${holeIdx}`} cx={x} cy={cy} state={resolveHole(holes[holeIdx], policy)} />)
+      parts.push(
+        <HoleGlyph
+          key={`h-${holeIdx}`}
+          cx={holeCenterX(x, holeIdx)}
+          cy={cy}
+          state={resolveHole(holes[holeIdx], policy)}
+        />,
+      )
     })
 
     y += h + M.fingerSepH
@@ -624,23 +649,37 @@ function FingeringColumn({
   return <g>{parts}</g>
 }
 
+const HALF_CLIP_ID = 'hole-half-left'
+
+/** 按住 = 熊猫圆章（与原图一致）；半孔 = 只露左半个熊猫 */
 function HoleGlyph({ cx, cy, state }: { cx: number; cy: number; state: number }) {
-  if (state === HOLE.CLOSED) {
-    return <circle cx={cx} cy={cy} r={M.holeR} fill={COLORS.ink} />
-  }
+  const r = M.holeR
+  const d = r * 2
+
   if (state === HOLE.OPEN) {
-    return (
-      <circle cx={cx} cy={cy} r={M.holeR} fill={COLORS.holeOpen} stroke={COLORS.holeEdge} strokeWidth={0.8} />
-    )
+    return <circle cx={cx} cy={cy} r={r} fill={COLORS.holeOpen} stroke={COLORS.holeEdge} strokeWidth={0.8} />
   }
-  // 半孔：左半黑
+
+  const panda = (
+    <image
+      href={PANDA_HOLE_PNG}
+      x={cx - r}
+      y={cy - r}
+      width={d}
+      height={d}
+      preserveAspectRatio="xMidYMid meet"
+      clipPath={state === HOLE.HALF ? `url(#${HALF_CLIP_ID})` : undefined}
+    />
+  )
+
+  if (state === HOLE.CLOSED) return panda
+
+  // 半孔：白底圆 + 左半个熊猫 + 一圈描边
   return (
     <g>
-      <circle cx={cx} cy={cy} r={M.holeR} fill={COLORS.holeOpen} stroke={COLORS.ink} strokeWidth={0.9} />
-      <path
-        d={`M ${cx} ${cy - M.holeR} A ${M.holeR} ${M.holeR} 0 0 0 ${cx} ${cy + M.holeR} Z`}
-        fill={COLORS.ink}
-      />
+      <circle cx={cx} cy={cy} r={r} fill={COLORS.holeOpen} />
+      {panda}
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke={COLORS.ink} strokeWidth={0.9} />
     </g>
   )
 }

@@ -39,6 +39,11 @@ export const M = {
   fingerCellH: 15,
   fingerSepH: 3,
   holeR: 5.8,
+  /**
+   * 第八孔与第一孔向左偏移的量，用来标出这两个孔的特殊性（与原图一致）。
+   * 原图实测：32px 宽的管身里，这两个圆的圆心比其余六个偏左约 6px。
+   */
+  edgeHoleShift: 6,
   get fingerH() {
     return this.fingerLabelH + this.fingerCellH * 8 + this.fingerSepH * 2
   },
