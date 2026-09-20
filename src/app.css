@@ -1,0 +1,293 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  color: #1a1a1a;
+  background: #f3f3f1;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 10px 18px;
+  background: #fff;
+  border-bottom: 1px solid #ddd;
+  flex: 0 0 auto;
+}
+
+.topbar h1 {
+  font-size: 17px;
+  margin: 0;
+  font-weight: 600;
+}
+
+.controls {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.controls label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #555;
+}
+
+.controls select,
+.controls input {
+  font: inherit;
+  padding: 3px 6px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.panes {
+  display: grid;
+  grid-template-columns: minmax(320px, 26%) 1fr;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #ddd;
+  background: #fff;
+  min-height: 0;
+}
+
+.header-form {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #eee;
+  background: #fafafa;
+  font-size: 12.5px;
+}
+
+.header-form label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.header-form label.wide {
+  grid-column: 1 / -1;
+}
+
+.header-form label > span {
+  flex: 0 0 46px;
+  color: #666;
+  text-align: right;
+}
+
+.header-form input,
+.header-form select {
+  flex: 1 1 auto;
+  min-width: 0;
+  font: inherit;
+  padding: 4px 7px;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.header-form input::placeholder {
+  color: #bbb;
+}
+
+.body-label {
+  flex: 0 0 auto;
+  padding: 8px 14px 4px;
+  font-size: 11.5px;
+  color: #999;
+  letter-spacing: 0.04em;
+}
+
+.editor textarea {
+  flex: 1 1 auto;
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 14px;
+  font-family: "JetBrains Mono", Menlo, Consolas, "Noto Sans Mono CJK SC", monospace;
+  font-size: 13.5px;
+  line-height: 1.85;
+  tab-size: 2;
+}
+
+.issues {
+  flex: 0 0 auto;
+  max-height: 34%;
+  overflow: auto;
+  border-top: 1px solid #eee;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.issues p {
+  margin: 0 0 4px;
+}
+
+.issues .ok {
+  color: #2a8a4a;
+}
+
+.issues .error {
+  color: #c0392b;
+}
+
+.issues .warn {
+  color: #b8860b;
+}
+
+.preview {
+  overflow: auto;
+  padding: 24px;
+  min-height: 0;
+}
+
+.page {
+  background: #fefefc;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.14);
+  margin: 0 auto 24px;
+  max-width: 1200px;
+}
+
+.empty {
+  color: #888;
+  text-align: center;
+  margin-top: 60px;
+}
+
+button {
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 14px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  background: #fff;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  background: #f5f5f5;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.primary {
+  background: #1a6dd4;
+  border-color: #1a6dd4;
+  color: #fff;
+}
+
+button.primary:hover:not(:disabled) {
+  background: #1560bd;
+}
+
+/* ---- 导出弹窗 ---- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.32);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 10px;
+  padding: 22px 26px;
+  width: 380px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22);
+  font-size: 13.5px;
+}
+
+.modal h2 {
+  margin: 0 0 16px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.modal .field {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.modal .field > span {
+  flex: 0 0 66px;
+  color: #555;
+}
+
+.modal .field input[type='text'],
+.modal .field input:not([type]) {
+  flex: 1 1 auto;
+  font: inherit;
+  padding: 5px 8px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+}
+
+.modal .radios {
+  display: flex;
+  gap: 16px;
+}
+
+.modal .radios label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.modal .hint {
+  margin: 0 0 12px 78px;
+  color: #888;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.modal-error {
+  margin: 4px 0 12px;
+  color: #c0392b;
+  font-size: 12.5px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
