@@ -37,10 +37,12 @@ const TEXT_FONT = '"Noto Serif SC", "Source Han Serif SC", "SimSun", "Microsoft 
 const FALLBACK_BANDS: Bands = {
   tempoY: 16,
   arcY: 14,
-  digitBaseline: 48,
-  digitsBottom: 62,
-  lyricBaseline: 62,
-  fingeringTop: 76,
+  digitBaseline: 44,
+  digitsBottom: 58,
+  lyricBaseline: 58,
+  fingeringTop: 72,
+  fingerLabelH: M.fingerLabelHBase,
+  fingerH: M.fingerLabelHBase + M.fingerCellH * 8 + M.fingerSepH * 2,
   systemHeight: 250,
 }
 
@@ -78,6 +80,21 @@ export function ScoreSvg({
         style={{ background: COLORS.paper, maxWidth: '100%', height: 'auto', display: 'block' }}
       >
         <defs>
+          {/*
+            熊猫图章只在这里内联一次，孔位用 fill="url(#…)" 引用。
+            整页上百个孔，若每个孔各写一份 data URI，SVG 会膨胀到几 MB。
+            patternContentUnits=objectBoundingBox 让图按引用它的圆自动缩放。
+          */}
+          <pattern
+            id={PANDA_PATTERN_ID}
+            patternUnits="objectBoundingBox"
+            patternContentUnits="objectBoundingBox"
+            width={1}
+            height={1}
+          >
+            <image href={PANDA_HOLE_PNG} x={0} y={0} width={1} height={1} preserveAspectRatio="none" />
+          </pattern>
+
           {/* objectBoundingBox：按元素自身包围盒裁一半，与它画在哪无关 */}
           <clipPath id={HALF_CLIP_ID} clipPathUnits="objectBoundingBox">
             <rect x={0} y={0} width={0.5} height={1} />
@@ -589,26 +606,30 @@ function FingeringColumn({
   ev: NoteEvent
   policy: AmbiguousPolicy
 }) {
+  const bands = useBands()
   const left = x - M.fingerW / 2
   const parts: JSX.Element[] = []
   let y = top
 
   SEGMENTS.forEach((seg, si) => {
-    const labelH = si === 0 ? M.fingerLabelH : 0
+    const labelH = si === 0 ? bands.fingerLabelH : 0
     const h = labelH + seg.length * M.fingerCellH
     parts.push(
       <rect key={`bg-${si}`} x={left} y={y} width={M.fingerW} height={h} fill={COLORS.tube} rx={2} />,
     )
 
     if (si === 0) {
+      // 唱名格已按全谱最大高音点数加高（见 computeBands），
+      // 基线跟着格高走，高音点就自然有地方画
+      const baseline = y + bands.fingerLabelH - 6
       parts.push(
         <text
           key="label"
           x={x}
-          y={y + M.fingerLabelH - 6}
+          y={baseline}
           textAnchor="middle"
           fontFamily={DIGIT_FONT}
-          fontSize={15}
+          fontSize={M.fingerLabelSize}
           fontStyle="italic"
           fontWeight={600}
           fill={COLORS.ink}
@@ -616,14 +637,18 @@ function FingeringColumn({
           {ev.degree}
         </text>,
       )
-      // 指法列顶部的唱名也带八度点
+      // 八度点画在唱名的正上方 / 正下方，与数字同一条竖线
       const n = Math.abs(ev.octave)
       for (let k = 0; k < n; k++) {
         parts.push(
           <circle
-            key={`ld-${k}`}
-            cx={x + 7}
-            cy={ev.octave > 0 ? y + 4 + k * 4 : y + M.fingerLabelH - 3 + k * 4}
+            key={`od-${k}`}
+            cx={x}
+            cy={
+              ev.octave > 0
+                ? baseline - M.fingerLabelSize - 2 - k * M.octaveLabelStep
+                : baseline + 4 + k * M.octaveLabelStep
+            }
             r={1.5}
             fill={COLORS.ink}
           />,
@@ -650,35 +675,25 @@ function FingeringColumn({
 }
 
 const HALF_CLIP_ID = 'hole-half-left'
+const PANDA_PATTERN_ID = 'hole-panda'
 
 /** 按住 = 熊猫圆章（与原图一致）；半孔 = 只露左半个熊猫 */
 function HoleGlyph({ cx, cy, state }: { cx: number; cy: number; state: number }) {
   const r = M.holeR
-  const d = r * 2
 
   if (state === HOLE.OPEN) {
     return <circle cx={cx} cy={cy} r={r} fill={COLORS.holeOpen} stroke={COLORS.holeEdge} strokeWidth={0.8} />
   }
 
-  const panda = (
-    <image
-      href={PANDA_HOLE_PNG}
-      x={cx - r}
-      y={cy - r}
-      width={d}
-      height={d}
-      preserveAspectRatio="xMidYMid meet"
-      clipPath={state === HOLE.HALF ? `url(#${HALF_CLIP_ID})` : undefined}
-    />
-  )
-
-  if (state === HOLE.CLOSED) return panda
+  if (state === HOLE.CLOSED) {
+    return <circle cx={cx} cy={cy} r={r} fill={`url(#${PANDA_PATTERN_ID})`} />
+  }
 
   // 半孔：白底圆 + 左半个熊猫 + 一圈描边
   return (
     <g>
       <circle cx={cx} cy={cy} r={r} fill={COLORS.holeOpen} />
-      {panda}
+      <circle cx={cx} cy={cy} r={r} fill={`url(#${PANDA_PATTERN_ID})`} clipPath={`url(#${HALF_CLIP_ID})`} />
       <circle cx={cx} cy={cy} r={r} fill="none" stroke={COLORS.ink} strokeWidth={0.9} />
     </g>
   )

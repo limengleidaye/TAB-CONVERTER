@@ -31,15 +31,25 @@ describe('孔位图标', () => {
   it('按住的孔画成熊猫图章，数量与指法表对得上', () => {
     const svg = svgOf(落了白)
     const closed = drawnHoles(落了白).filter((h) => h.state === HOLE.CLOSED).length
-    const images = svg.match(/<image /g) ?? []
+    const filled = svg.match(/fill="url\(#hole-panda\)"/g) ?? []
     expect(closed).toBeGreaterThan(0)
-    expect(images).toHaveLength(closed)
-    expect(svg).toContain(PANDA_HOLE_PNG.slice(0, 64))
+    expect(filled).toHaveLength(closed)
   })
 
   it('熊猫是内联 data URI（导出光栅化时外链图片加载不到）', () => {
     expect(PANDA_HOLE_PNG.startsWith('data:image/png;base64,')).toBe(true)
     expect(svgOf(落了白)).not.toMatch(/href="(?!data:)/)
+  })
+
+  it('图片只内联一次，不随孔数膨胀', () => {
+    const svg = svgOf(落了白)
+    const closed = drawnHoles(落了白).filter((h) => h.state === HOLE.CLOSED).length
+    expect(closed).toBeGreaterThan(50)
+
+    // 整页上百个孔各带一份 data URI 的话，SVG 会到几 MB
+    expect(svg.match(/<image /g) ?? []).toHaveLength(1)
+    expect(svg.split(PANDA_HOLE_PNG).length - 1).toBe(1)
+    expect(svg.length).toBeLessThan(PANDA_HOLE_PNG.length + closed * 400)
   })
 
   it('半孔的裁剪定义存在且按自身包围盒裁一半', () => {

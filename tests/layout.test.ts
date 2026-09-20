@@ -89,10 +89,20 @@ describe('竖向分带不重叠', () => {
 })
 
 describe('分页', () => {
-  it('《落了白》单页放得下（与原图一致）', () => {
+  it('《落了白》单页 5 行放得下（与原图一致）', () => {
     const r = compile(落了白)
     expect(r.layout!.pages).toHaveLength(1)
     expect(r.layout!.pages[0].systems).toHaveLength(5)
+  })
+
+  it('每行小节数落在合理区间，不会挤成一行也不会稀到两小节以下', () => {
+    for (const dsl of [落了白, 为爱追寻]) {
+      const systems = compile(dsl).layout!.pages.flatMap((p) => p.systems)
+      for (const s of systems) {
+        expect(s.measures.length).toBeGreaterThanOrEqual(2)
+        expect(s.measures.length).toBeLessThanOrEqual(5)
+      }
+    }
   })
 
   it('《为爱追寻》单页 3 行（与原图一致）', () => {

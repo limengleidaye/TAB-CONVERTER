@@ -18,8 +18,8 @@ export const M = {
   subtitleSize: 19,
   headerBlockH: 112,
 
-  digitSize: 30,
-  digitHalfW: 12,
+  digitSize: 26,
+  digitHalfW: 10.5,
 
   /** 简谱行上方预留：变速记号带、弧线带 */
   tempoBand: 16,
@@ -34,19 +34,19 @@ export const M = {
 
   lyricSize: 19,
 
-  fingerW: 32,
-  fingerLabelH: 20,
-  fingerCellH: 15,
+  fingerW: 28,
+  fingerCellH: 18,
   fingerSepH: 3,
-  holeR: 5.8,
+  holeR: 8.6,
+  /** 指法列顶部唱名的字号与八度点行距 */
+  fingerLabelSize: 13,
+  fingerLabelHBase: 19,
+  octaveLabelStep: 4,
   /**
    * 第八孔与第一孔向左偏移的量，用来标出这两个孔的特殊性（与原图一致）。
-   * 原图实测：32px 宽的管身里，这两个圆的圆心比其余六个偏左约 6px。
+   * 原图实测：管身宽度的约 19%（32px 宽里偏左 6px）。
    */
-  edgeHoleShift: 6,
-  get fingerH() {
-    return this.fingerLabelH + this.fingerCellH * 8 + this.fingerSepH * 2
-  },
+  edgeHoleShift: 5,
 
   /** 简谱行底部（含减时线与低音点）到歌词基线的净空 */
   lyricClearance: 6,
@@ -58,7 +58,11 @@ export const M = {
 
   measureGap: 14,
   groupGap: 8,
-  minNoteW: 28,
+  /**
+   * 每个音的自然宽度下限。它只影响折行判断（排满一行后还会两端对齐拉开），
+   * 取 36 是为了让每行的小节数贴近原图——太小会把 4~5 个小节挤进一行。
+   */
+  minNoteW: 36,
   /** 一行的自然宽度达到内容宽度这个比例时才两端对齐，避免末行被拉散 */
   justifyThreshold: 0.6,
 }
@@ -134,6 +138,10 @@ export interface Bands {
   lyricBaseline: number
   /** 洞洞谱顶部 */
   fingeringTop: number
+  /** 指法列顶部唱名格的高度（高音点多时会变高） */
+  fingerLabelH: number
+  /** 指法列总高 */
+  fingerH: number
   /** 一行谱总高 */
   systemHeight: number
 }
@@ -204,9 +212,23 @@ export function computeBands(ext: ContentExtent): Bands {
 
   const lyricBaseline = ext.hasLyrics ? digitsBottom + M.lyricClearance + M.lyricSize : digitsBottom
   const fingeringTop = ext.hasLyrics ? lyricBaseline + M.lyricToFinger : digitsBottom + M.digitsToFinger
-  const systemHeight = fingeringTop + M.fingerH + M.systemPadBottom
 
-  return { tempoY, arcY, digitBaseline, digitsBottom, lyricBaseline, fingeringTop, systemHeight }
+  // 指法列顶部的唱名格：高音点画在数字上方，点越多这一格越高
+  const fingerLabelH = M.fingerLabelHBase + ext.maxHighOctave * M.octaveLabelStep
+  const fingerH = fingerLabelH + M.fingerCellH * 8 + M.fingerSepH * 2
+  const systemHeight = fingeringTop + fingerH + M.systemPadBottom
+
+  return {
+    tempoY,
+    arcY,
+    digitBaseline,
+    digitsBottom,
+    lyricBaseline,
+    fingeringTop,
+    fingerLabelH,
+    fingerH,
+    systemHeight,
+  }
 }
 
 export function layout(score: Score, keySignature: string | null): Layout {
