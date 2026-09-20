@@ -3,6 +3,7 @@
  * 头部（键值对）由 parseHeader 单独处理，这里只切正文音符流。
  */
 
+import { findCommand, sectionOf, tempoOf } from './commands'
 import type { Accidental, TempoMark } from './types'
 
 export type TokenKind =
@@ -22,6 +23,7 @@ export type TokenKind =
   | 'volta' // [1.  [2.
   | 'tempo' // 速度=88 / 渐快 / 渐慢 / 原速 / 延长
   | 'section' // D.C. / D.S. / Fine / Coda / %
+  | 'fermata' // 自由延长，加在前一个音上
 
 export interface Token {
   kind: TokenKind
@@ -57,18 +59,23 @@ export interface TokenizeResult {
  */
 const LYRIC_CHAR = /\p{Script=Han}/u
 
-/** 变速关键字（中文与意大利文两种写法等价，§3.9） */
+/**
+ * 兼容别名。首选写法是反斜杠命令（见 core/commands.ts）——
+ * 正文里的中文一律当歌词，让中文再兼任记号会有歧义。
+ * 这些旧写法继续认，但界面与教程只展示 \ 命令。
+ */
 const TEMPO_WORDS: Record<string, TempoMark> = {
   渐快: { kind: 'accel' },
   渐慢: { kind: 'rit' },
   原速: { kind: 'atempo' },
-  延长: { kind: 'fermata' },
   'accel.': { kind: 'accel' },
   accel: { kind: 'accel' },
   'rit.': { kind: 'rit' },
   rit: { kind: 'rit' },
   'a tempo': { kind: 'atempo' },
 }
+
+const FERMATA_WORDS = ['延长']
 
 const SECTION_WORDS: Record<string, string> = {
   'D.C.': 'D.C.',
@@ -146,7 +153,46 @@ export function tokenize(src: string): TokenizeResult {
       continue
     }
 
-    // 变速：速度=88
+    // 反斜杠命令：\rit \dc \tempo=88 …
+    if (ch === '\\') {
+      const m = /^\\([A-Za-z]+)(?:\s*=\s*(\d+))?/.exec(src.slice(i))
+      const cmd = m ? findCommand(m[1]) : undefined
+      if (!m || !cmd) {
+        const end = m ? i + m[0].length : i + 1
+        errors.push({ message: `未知命令 "${src.slice(i, end)}"`, span: [i, end] })
+        i = end
+        continue
+      }
+      const raw = m[0]
+      const value = m[2] === undefined ? undefined : Number(m[2])
+      if (cmd.name === 'tempo' && value === undefined) {
+        errors.push({ message: '\\tempo 要带数值，例如 \\tempo=88', span: [i, i + raw.length] })
+        i += raw.length
+        continue
+      }
+      if (cmd.name === 'fermata') {
+        push({ kind: 'fermata', span: [i, i + raw.length], raw })
+        i += raw.length
+        continue
+      }
+      const tempo = tempoOf(cmd.name, value)
+      if (tempo) {
+        push({ kind: 'tempo', span: [i, i + raw.length], raw, tempo })
+        i += raw.length
+        continue
+      }
+      const section = sectionOf(cmd.name)
+      if (section) {
+        push({ kind: 'section', span: [i, i + raw.length], raw, section })
+        i += raw.length
+        continue
+      }
+      errors.push({ message: `未知命令 "${raw}"`, span: [i, i + raw.length] })
+      i += raw.length
+      continue
+    }
+
+    // 变速：速度=88（兼容写法）
     const bpm = /^速度\s*[=＝]\s*(\d+)/.exec(src.slice(i))
     if (bpm) {
       push({
@@ -163,6 +209,11 @@ export function tokenize(src: string): TokenizeResult {
     const wordHit = matchWord(src, i)
     if (wordHit) {
       const { word, len } = wordHit
+      if (word === '延长') {
+        push({ kind: 'fermata', span: [i, i + len], raw: word })
+        i += len
+        continue
+      }
       if (TEMPO_WORDS[word]) {
         push({ kind: 'tempo', span: [i, i + len], raw: word, tempo: TEMPO_WORDS[word] })
       } else {
@@ -263,7 +314,7 @@ export function tokenize(src: string): TokenizeResult {
 
 /** 匹配变速/段落关键字，返回命中的词与消耗长度（"a tempo" 允许中间有空格） */
 function matchWord(src: string, i: number): { word: string; len: number } | null {
-  const candidates = [...Object.keys(TEMPO_WORDS), ...Object.keys(SECTION_WORDS)]
+  const candidates = [...Object.keys(TEMPO_WORDS), ...Object.keys(SECTION_WORDS), ...FERMATA_WORDS]
   // 长词优先，避免 "rit" 抢在 "rit." 前面
   candidates.sort((a, b) => b.length - a.length)
   for (const word of candidates) {

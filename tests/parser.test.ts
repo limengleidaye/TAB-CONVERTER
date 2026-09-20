@@ -193,8 +193,8 @@ describe('变速', () => {
 
   it('延长记号作用在前一个音上', () => {
     const ns = notesOf('1 延长 2 |')
-    expect(ns[0].tempoMark?.kind).toBe('fermata')
-    expect(ns[1].tempoMark).toBeUndefined()
+    expect(ns[0].fermata).toBe(true)
+    expect(ns[1].fermata).toBeFalsy()
   })
 
   it('变速不占拍数', () => {
@@ -316,5 +316,57 @@ describe('验收样例', () => {
   it('两首曲子的调号都推导为 1=C', () => {
     expect(compile(落了白).layout!.keySignature).toBe('1=C')
     expect(compile(为爱追寻).layout!.keySignature).toBe('1=C')
+  })
+})
+
+describe('反斜杠命令', () => {
+  it('变速命令', () => {
+    expect(notesOf('\\rit 1 |')[0].tempoMark?.kind).toBe('rit')
+    expect(notesOf('\\accel 1 |')[0].tempoMark?.kind).toBe('accel')
+    expect(notesOf('\\atempo 1 |')[0].tempoMark?.kind).toBe('atempo')
+    expect(notesOf('\\tempo=96 1 |')[0].tempoMark).toEqual({ kind: 'bpm', bpm: 96 })
+  })
+
+  it('\\fermata 作用在前一个音上，且与变速记号互不覆盖', () => {
+    const ns = notesOf('1 \\fermata 2 |')
+    expect(ns[0].fermata).toBe(true)
+    expect(ns[1].fermata).toBeFalsy()
+
+    // 同一个音同时带变速和延长时，两者都要保住
+    const both = notesOf('1 \\tempo=60 2 \\fermata 3 4 |')
+    expect(both[1].tempoMark).toEqual({ kind: 'bpm', bpm: 60 })
+    expect(both[1].fermata).toBe(true)
+  })
+
+  it('段落命令进入所在小节的 marks', () => {
+    const { score } = parse(HEAD + '1 2 3 4 \\fine | \\segno 5 6 7 1^ \\dc ||')
+    expect(score!.measures[0].marks).toEqual(['Fine'])
+    expect(score!.measures[1].marks).toEqual(['Segno', 'D.C.'])
+  })
+
+  it('命令不占拍数', () => {
+    const { score } = parse(HEAD + '\\segno 1 \\rit 2 3 4 \\fine |')
+    expect(score!.measures[0].beats).toBe(4)
+  })
+
+  it('未知命令报错并定位', () => {
+    const { issues } = parse(HEAD + '1 \\nope 2 3 4 |')
+    const err = issues.find((i) => i.severity === 'error')
+    expect(err?.message).toContain('未知命令')
+    expect(err?.span).toBeDefined()
+  })
+
+  it('\\tempo 不带数值报错', () => {
+    const { issues } = parse(HEAD + '\\tempo 1 2 3 4 |')
+    expect(issues.some((i) => i.message.includes('\\tempo 要带数值'))).toBe(true)
+  })
+
+  it('大小写不敏感', () => {
+    expect(notesOf('\\RIT 1 |')[0].tempoMark?.kind).toBe('rit')
+  })
+
+  it('旧的中文写法仍然兼容', () => {
+    expect(notesOf('渐慢 1 |')[0].tempoMark?.kind).toBe('rit')
+    expect(notesOf('速度=88 1 |')[0].tempoMark).toEqual({ kind: 'bpm', bpm: 88 })
   })
 })

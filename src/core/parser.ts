@@ -337,15 +337,29 @@ function parseBody(text: string, offset: number, issues: Issue[]): BodyResult {
         break
       }
 
+      case 'fermata': {
+        // 延长记号作用在「前一个音」上
+        const prev = allNotes[allNotes.length - 1]
+        if (prev) prev.fermata = true
+        else
+          issues.push({
+            severity: 'warning',
+            message: '延长记号前面没有音符',
+            span: shift(tk.span, offset),
+          })
+        break
+      }
+
       case 'tempo':
-        // 延长记号作用在「前一个音」上，其余作用在「后一个音」上
-        if (tk.tempo!.kind === 'fermata') {
-          const prev = allNotes[allNotes.length - 1]
-          if (prev) prev.tempoMark = tk.tempo
-          else issues.push({ severity: 'warning', message: '「延长」前面没有音符', span: shift(tk.span, offset) })
-        } else {
-          pendingTempo = tk.tempo
+        // 一个音只能挂一个变速记号；连着写两个多半是笔误
+        if (pendingTempo) {
+          issues.push({
+            severity: 'warning',
+            message: '同一个音上有两个变速记号，只保留后一个',
+            span: shift(tk.span, offset),
+          })
         }
+        pendingTempo = tk.tempo
         break
 
       case 'section':

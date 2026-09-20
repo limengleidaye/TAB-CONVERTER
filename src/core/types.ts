@@ -19,7 +19,7 @@ export interface Grace {
   octave: number
 }
 
-export type TempoKind = 'bpm' | 'accel' | 'rit' | 'atempo' | 'fermata'
+export type TempoKind = 'bpm' | 'accel' | 'rit' | 'atempo'
 
 /** 曲中变速记号（§3.9） */
 export interface TempoMark {
@@ -48,6 +48,11 @@ export interface NoteEvent {
   lyric?: string
   graces?: Grace[]
   tempoMark?: TempoMark
+  /**
+   * 自由延长记号。它是加在音符上的演奏法，不是速度指令，
+   * 所以和 tempoMark 分开存——否则 \tempo=60 \fermata 落在同一个音上会互相覆盖。
+   */
+  fermata?: boolean
   /** 被延音线连到的第二个及之后的同音：不重新起吹、不画指法（§3.5） */
   tiedFromPrev: boolean
   /** 后缀 ~：与下一个音以延音线相连（可跨梁分组、跨小节） */

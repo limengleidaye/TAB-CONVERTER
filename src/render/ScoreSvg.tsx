@@ -40,6 +40,7 @@ const FALLBACK_BANDS: Bands = {
   arcY: 14,
   digitBaseline: 44,
   digitsBottom: 58,
+  fermataY: 16,
   lyricBaseline: 58,
   fingeringTop: 72,
   fingerLabelH: M.fingerLabelHBase,
@@ -314,6 +315,11 @@ function SystemView({
   )
 }
 
+
+/** Segno / Coda 是跳转目标，标在小节开头；其余标在小节末尾 */
+const MARK_AT_START = new Set(['Segno', 'Coda'])
+const MARK_GLYPH: Record<string, string> = { Segno: '%', Coda: '\u2295' }
+
 function MeasureView({
   lm,
   hasLyrics,
@@ -361,19 +367,40 @@ function MeasureView({
         </g>
       ) : null}
 
-      {m.marks.map((mk, i) => (
-        <text
-          key={i}
-          x={lm.x + 2}
-          y={markY}
-          fontFamily={TEXT_FONT}
-          fontSize={15}
-          fontStyle="italic"
-          fill={COLORS.ink}
-        >
-          {mk}
-        </text>
-      ))}
+      {/*
+        段落记号按惯例分左右：Segno / Coda 标在小节开头（跳转目标），
+        D.C. / D.S. / Fine 标在小节末尾（读到这里才执行）。
+      */}
+      {m.marks
+        .filter((mk) => MARK_AT_START.has(mk))
+        .map((mk, i) => (
+          <text
+            key={`s${i}`}
+            x={lm.x + 2}
+            y={markY}
+            fontFamily={TEXT_FONT}
+            fontSize={16}
+            fill={COLORS.ink}
+          >
+            {MARK_GLYPH[mk] ?? mk}
+          </text>
+        ))}
+      {m.marks
+        .filter((mk) => !MARK_AT_START.has(mk))
+        .map((mk, i) => (
+          <text
+            key={`e${i}`}
+            x={lm.barX - 4}
+            y={markY}
+            textAnchor="end"
+            fontFamily={TEXT_FONT}
+            fontSize={15}
+            fontStyle="italic"
+            fill={COLORS.ink}
+          >
+            {MARK_GLYPH[mk] ?? mk}
+          </text>
+        ))}
 
       {m.openBarline === 'repeatStart' ? <Barline x={lm.x - 8} kind="repeatStart" /> : null}
 
@@ -423,6 +450,7 @@ function NoteGlyph({ ln }: { ln: LaidNote }) {
   return (
     <g>
       {ev.tempoMark ? <TempoGlyph ev={ev} x={ln.x} /> : null}
+      {ev.fermata ? <FermataGlyph x={ln.x} /> : null}
       {ev.graces?.length ? <GraceGlyphs ev={ev} x={ln.x} /> : null}
 
       {ev.accidental ? (
@@ -489,6 +517,7 @@ function OctaveDots({ ev, x }: { ev: NoteEvent; x: number }) {
 function TempoGlyph({ ev, x }: { ev: NoteEvent; x: number }) {
   const bands = useBands()
   const t = ev.tempoMark!
+
   const label =
     t.kind === 'bpm'
       ? `♩=${t.bpm}`
@@ -496,9 +525,7 @@ function TempoGlyph({ ev, x }: { ev: NoteEvent; x: number }) {
         ? 'accel.'
         : t.kind === 'rit'
           ? 'rit.'
-          : t.kind === 'atempo'
-            ? 'a tempo'
-            : '𝄐'
+          : 'a tempo'
   return (
     <text
       x={x}
@@ -511,6 +538,23 @@ function TempoGlyph({ ev, x }: { ev: NoteEvent; x: number }) {
     >
       {label}
     </text>
+  )
+}
+
+/** 自己画，不用 𝄐 (U+1D110)：多数中文字体没有这个字形，会出豆腐块 */
+function FermataGlyph({ x }: { x: number }) {
+  const bands = useBands()
+  const y = bands.fermataY
+  return (
+    <g>
+      <path
+        d={`M ${x - 7} ${y} A 7 7 0 0 1 ${x + 7} ${y}`}
+        fill="none"
+        stroke={COLORS.ink}
+        strokeWidth={1.3}
+      />
+      <circle cx={x} cy={y - 2.5} r={1.5} fill={COLORS.ink} />
+    </g>
   )
 }
 

@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 
+import { BodyEditor } from './components/BodyEditor'
 import { ExportDialog } from './components/ExportDialog'
 import { HeaderForm } from './components/HeaderForm'
 import { TutorialDialog } from './components/TutorialDialog'
@@ -120,7 +121,7 @@ export default function App() {
               <option value="开">渲染成开</option>
             </select>
           </label>
-          <button onClick={() => setTutorialOpen(true)}>说明</button>
+          <button onClick={() => setTutorialOpen(true)}>教程</button>
           <button className="primary" onClick={() => setDialogOpen(true)} disabled={!canExport}>
             导出…
           </button>
@@ -131,8 +132,8 @@ export default function App() {
         <section className="editor">
           <HeaderForm fields={fields} onChange={setField} derivedKey={derivedKey} />
 
-          <div className="body-label">正文（音符流）</div>
-          <textarea value={body} onChange={(e) => setBody(e.target.value)} spellCheck={false} />
+          <div className="body-label">正文（音符流）　· 打 \ 弹出命令面板</div>
+          <BodyEditor value={body} onChange={setBody} />
 
           <div className="issues">
             {errors.length === 0 && warnings.length === 0 ? <p className="ok">无问题</p> : null}

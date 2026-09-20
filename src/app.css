@@ -482,3 +482,64 @@ button.primary:hover:not(:disabled) {
   border-top: 1px solid #eee;
   flex: 0 0 auto;
 }
+
+/* ---- 正文编辑器与命令补全 ---- */
+
+.body-editor {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+}
+
+.body-editor textarea {
+  flex: 1 1 auto;
+}
+
+.cmd-popup {
+  position: absolute;
+  z-index: 20;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 7px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.16);
+  max-height: 246px;
+  overflow-y: auto;
+  min-width: 268px;
+}
+
+.cmd-popup li {
+  display: grid;
+  grid-template-columns: 84px 58px 1fr;
+  align-items: baseline;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12.5px;
+}
+
+.cmd-popup li.active {
+  background: #eaf2fd;
+}
+
+.cmd-popup code {
+  font-family: "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  color: #1a6dd4;
+  white-space: nowrap;
+}
+
+.cmd-render {
+  color: #444;
+  font-style: italic;
+  white-space: nowrap;
+}
+
+.cmd-desc {
+  color: #999;
+  font-size: 12px;
+}

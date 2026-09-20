@@ -52,6 +52,7 @@ describe('竖向分带不重叠', () => {
       maxLowOctave: 0,
       maxHighOctave: 0,
       hasTempo: false,
+      hasFermata: false,
       hasLyrics: false,
     })
     const high = computeBands({
@@ -59,6 +60,7 @@ describe('竖向分带不重叠', () => {
       maxLowOctave: 0,
       maxHighOctave: 2,
       hasTempo: false,
+      hasFermata: false,
       hasLyrics: false,
     })
     expect(high.digitBaseline).toBeGreaterThan(plain.digitBaseline)
@@ -70,17 +72,17 @@ describe('竖向分带不重叠', () => {
 
   it('有变速记号时才给它留位置', () => {
     const without = computeBands({
-      maxBeams: 0, maxLowOctave: 0, maxHighOctave: 0, hasTempo: false, hasLyrics: false,
+      maxBeams: 0, maxLowOctave: 0, maxHighOctave: 0, hasTempo: false, hasFermata: false, hasLyrics: false,
     })
     const withTempo = computeBands({
-      maxBeams: 0, maxLowOctave: 0, maxHighOctave: 0, hasTempo: true, hasLyrics: false,
+      maxBeams: 0, maxLowOctave: 0, maxHighOctave: 0, hasTempo: true, hasFermata: false, hasLyrics: false,
     })
     expect(withTempo.digitBaseline - without.digitBaseline).toBe(M.tempoBand)
     expect(withTempo.tempoY).toBeLessThan(withTempo.arcY)
   })
 
   it('减时线越多、低音点越多，行越高', () => {
-    const base = { maxHighOctave: 0, hasTempo: false, hasLyrics: true }
+    const base = { maxHighOctave: 0, hasTempo: false, hasFermata: false, hasLyrics: true }
     const shallow = computeBands({ ...base, maxBeams: 1, maxLowOctave: 1 })
     const deep = computeBands({ ...base, maxBeams: 3, maxLowOctave: 2 })
     expect(deep.systemHeight).toBeGreaterThan(shallow.systemHeight)

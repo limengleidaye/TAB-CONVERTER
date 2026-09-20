@@ -23,6 +23,7 @@ export const M = {
 
   /** 简谱行上方预留：变速记号带、弧线带 */
   tempoBand: 16,
+  fermataBand: 14,
   arcBand: 14,
   topPad: 4,
 
@@ -128,6 +129,8 @@ export interface Page {
 export interface Bands {
   /** 变速记号基线 */
   tempoY: number
+  /** 自由延长记号的弧线基线 */
+  fermataY: number
   /** 弧线（圆滑线/延音线）的两端 y */
   arcY: number
   /** 简谱数字基线 */
@@ -159,6 +162,7 @@ interface ContentExtent {
   maxLowOctave: number
   maxHighOctave: number
   hasTempo: boolean
+  hasFermata: boolean
   hasLyrics: boolean
 }
 
@@ -167,6 +171,7 @@ function measureExtent(score: Score): ContentExtent {
   let maxLowOctave = 0
   let maxHighOctave = 0
   let hasTempo = false
+  let hasFermata = false
   let hasLyrics = false
 
   for (const m of score.measures) {
@@ -175,6 +180,7 @@ function measureExtent(score: Score): ContentExtent {
       if (n.octave < 0 && -n.octave > maxLowOctave) maxLowOctave = -n.octave
       if (n.octave > 0 && n.octave > maxHighOctave) maxHighOctave = n.octave
       if (n.tempoMark) hasTempo = true
+      if (n.fermata) hasFermata = true
       if (n.lyric) hasLyrics = true
       // 倚音自带八度点，也要算进上方净空
       for (const g of n.graces ?? []) {
@@ -182,7 +188,7 @@ function measureExtent(score: Score): ContentExtent {
       }
     }
   }
-  return { maxBeams, maxLowOctave, maxHighOctave, hasTempo, hasLyrics }
+  return { maxBeams, maxLowOctave, maxHighOctave, hasTempo, hasFermata, hasLyrics }
 }
 
 export function computeBands(ext: ContentExtent): Bands {
@@ -190,11 +196,16 @@ export function computeBands(ext: ContentExtent): Bands {
   const highDotSpace =
     ext.maxHighOctave > 0 ? 3 + (ext.maxHighOctave - 1) * M.octaveDotStep + 2 * M.octaveDotR : 0
 
+  // 变速记号和延长记号各占一条带，谁出现谁占位——
+  // 两者可以同时落在一个音上，挤在一起就会重叠
   const tempoReserve = ext.hasTempo ? M.tempoBand : 0
-  const digitBaseline = M.topPad + tempoReserve + M.arcBand + highDotSpace + M.digitSize
+  const fermataReserve = ext.hasFermata ? M.fermataBand : 0
+  const digitBaseline =
+    M.topPad + tempoReserve + fermataReserve + M.arcBand + highDotSpace + M.digitSize
   const digitTop = digitBaseline - M.digitSize
   const arcY = digitTop - highDotSpace - 4
   const tempoY = M.topPad + 12
+  const fermataY = M.topPad + tempoReserve + 11
 
   // 数字下方：减时线 + 低音点，取更低的那个
   const beamBottom =
@@ -220,6 +231,7 @@ export function computeBands(ext: ContentExtent): Bands {
 
   return {
     tempoY,
+    fermataY,
     arcY,
     digitBaseline,
     digitsBottom,
