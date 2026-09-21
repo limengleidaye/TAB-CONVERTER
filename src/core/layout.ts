@@ -152,9 +152,19 @@ export interface Bands {
 export interface Layout {
   pages: Page[]
   hasLyrics: boolean
+  /** 这份布局不画洞洞谱（播放窗用：上下都是洞洞谱就重复了） */
+  omitFingering: boolean
   keySignature: string | null
   bands: Bands
   metrics: typeof M
+}
+
+export interface LayoutOptions {
+  /**
+   * 不排洞洞谱那一带。横向宽度仍按有洞洞谱算，
+   * 这样折行位置和打印出来的谱完全一致，只是竖着矮了一大截。
+   */
+  omitFingering?: boolean
 }
 
 interface ContentExtent {
@@ -191,7 +201,7 @@ function measureExtent(score: Score): ContentExtent {
   return { maxBeams, maxLowOctave, maxHighOctave, hasTempo, hasFermata, hasLyrics }
 }
 
-export function computeBands(ext: ContentExtent): Bands {
+export function computeBands(ext: ContentExtent, omitFingering = false): Bands {
   // 数字上方：高音点占的高度
   const highDotSpace =
     ext.maxHighOctave > 0 ? 3 + (ext.maxHighOctave - 1) * M.octaveDotStep + 2 * M.octaveDotR : 0
@@ -225,9 +235,11 @@ export function computeBands(ext: ContentExtent): Bands {
   const fingeringTop = ext.hasLyrics ? lyricBaseline + M.lyricToFinger : digitsBottom + M.digitsToFinger
 
   // 指法列顶部的唱名格：高音点画在数字上方，点越多这一格越高
-  const fingerLabelH = M.fingerLabelHBase + ext.maxHighOctave * M.octaveLabelStep
-  const fingerH = fingerLabelH + M.fingerCellH * 8 + M.fingerSepH * 2
-  const systemHeight = fingeringTop + fingerH + M.systemPadBottom
+  const fingerLabelH = omitFingering ? 0 : M.fingerLabelHBase + ext.maxHighOctave * M.octaveLabelStep
+  const fingerH = omitFingering ? 0 : fingerLabelH + M.fingerCellH * 8 + M.fingerSepH * 2
+  const systemHeight = omitFingering
+    ? (ext.hasLyrics ? lyricBaseline + 6 : digitsBottom) + M.systemPadBottom
+    : fingeringTop + fingerH + M.systemPadBottom
 
   return {
     tempoY,
@@ -243,9 +255,10 @@ export function computeBands(ext: ContentExtent): Bands {
   }
 }
 
-export function layout(score: Score, keySignature: string | null): Layout {
+export function layout(score: Score, keySignature: string | null, opts: LayoutOptions = {}): Layout {
   const hasLyrics = score.hasLyrics
-  const bands = computeBands(measureExtent(score))
+  const omitFingering = !!opts.omitFingering
+  const bands = computeBands(measureExtent(score), omitFingering)
   const contentW = M.pageW - M.marginX * 2
 
   // ---- 1. 逐音算宽 ----
@@ -338,7 +351,7 @@ export function layout(score: Score, keySignature: string | null): Layout {
   }
   if (cur.length > 0) pages.push({ systems: cur })
 
-  return { pages, hasLyrics, keySignature, bands, metrics: M }
+  return { pages, hasLyrics, omitFingering, keySignature, bands, metrics: M }
 }
 
 /** 小节未对齐时的自然宽度：各音宽 + 梁分组间隙 + 小节间隙 */

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { M, computeBands } from '../src/core/layout'
+import { M, computeBands, layout } from '../src/core/layout'
+import { parse } from '../src/core/parser'
 import { compile } from '../src/core/pipeline'
 import { 为爱追寻, 落了白 } from '../src/samples'
 
@@ -121,5 +122,22 @@ describe('分页', () => {
         expect(last.y + last.height).toBeLessThanOrEqual(M.pageH - M.marginBottom)
       }
     }
+  })
+})
+
+describe('不带洞洞谱的布局（播放窗用）', () => {
+  it('一行谱矮一大截，一页能多放好几行，折行位置不变', () => {
+    const src = 落了白
+    const full = compile(src)
+    const plain = layout(parse(src).score!, full.layout!.keySignature, { omitFingering: true })
+
+    expect(plain.omitFingering).toBe(true)
+    expect(plain.bands.fingerH).toBe(0)
+    expect(plain.bands.systemHeight).toBeLessThan(full.layout!.bands.systemHeight * 0.55)
+
+    // 竖着矮了但横着一模一样：每行的小节数与打印谱一致
+    const rowsOf = (l: typeof plain) =>
+      l.pages.flatMap((p) => p.systems.map((s) => s.measures.map((m) => m.measure.index).join(',')))
+    expect(rowsOf(plain)).toEqual(rowsOf(full.layout!))
   })
 })

@@ -6,7 +6,7 @@
  */
 
 import { Fragment, createContext, useContext, useId } from 'react'
-import { HOLE, resolveHole, type AmbiguousPolicy } from '../core/fingering/table'
+import { type AmbiguousPolicy } from '../core/fingering/table'
 import {
   M,
   type ArcSeg,
@@ -20,20 +20,15 @@ import {
   type TupletSeg,
 } from '../core/layout'
 import type { NoteEvent, Score } from '../core/types'
-import { PANDA_HOLE_PNG } from './panda'
+import { COLORS, DIGIT_FONT, TEXT_FONT } from './colors'
+import {
+  FingeringColumn,
+  FingeringDefs,
+  makeDefsIds,
+  type FingeringDefsIds,
+} from './FingeringColumn'
 
-export const COLORS = {
-  ink: '#1a1a1a',
-  paper: '#FEFEFC',
-  tube: '#F9B556',
-  holeOpen: '#FFFFFF',
-  holeEdge: '#E0973C',
-  watermark: '#E6E6E6',
-  warn: '#C98A00',
-}
-
-const DIGIT_FONT = '"Times New Roman", "Nimbus Roman", "SimSun", serif'
-const TEXT_FONT = '"Noto Serif SC", "Source Han Serif SC", "SimSun", "Microsoft YaHei", serif'
+export { COLORS }
 
 const FALLBACK_BANDS: Bands = {
   tempoY: 16,
@@ -51,16 +46,8 @@ const FALLBACK_BANDS: Bands = {
 const BandsContext = createContext<Bands>(FALLBACK_BANDS)
 const useBands = () => useContext(BandsContext)
 
-/**
- * <defs> 里的 id 按 svg 实例取唯一值。
- * 教程弹窗里会同时挂十几张片段 svg，固定 id 会在同一文档里重复，
- * 而 url(#id) 是全文档解析的——重复 id 属于未定义行为，别赌它。
- */
-interface DefsIds {
-  panda: string
-  halfClip: string
-}
-const DefsContext = createContext<DefsIds>({ panda: 'hole-panda', halfClip: 'hole-half-left' })
+/** 指法列的 defs id（每张 svg 一套，见 FingeringColumn）靠 context 传到深处 */
+const DefsContext = createContext<FingeringDefsIds>(makeDefsIds('fallback'))
 const useDefsIds = () => useContext(DefsContext)
 
 /**
@@ -92,8 +79,7 @@ export function ScoreSvg({
   warnMeasures,
   snippet,
 }: ScoreSvgProps) {
-  const uid = useId().replace(/[^a-zA-Z0-9]/g, '')
-  const ids: DefsIds = { panda: `hole-panda-${uid}`, halfClip: `hole-half-${uid}` }
+  const ids = makeDefsIds(useId())
 
   const page = layout.pages[pageIndex]
   if (!page) return null
@@ -111,27 +97,7 @@ export function ScoreSvg({
         height={vb.h}
         style={{ background: COLORS.paper, maxWidth: '100%', height: 'auto', display: 'block' }}
       >
-        <defs>
-          {/*
-            熊猫图章只在这里内联一次，孔位用 fill="url(#…)" 引用。
-            整页上百个孔，若每个孔各写一份 data URI，SVG 会膨胀到几 MB。
-            patternContentUnits=objectBoundingBox 让图按引用它的圆自动缩放。
-          */}
-          <pattern
-            id={ids.panda}
-            patternUnits="objectBoundingBox"
-            patternContentUnits="objectBoundingBox"
-            width={1}
-            height={1}
-          >
-            <image href={PANDA_HOLE_PNG} x={0} y={0} width={1} height={1} preserveAspectRatio="none" />
-          </pattern>
-
-          {/* objectBoundingBox：按元素自身包围盒裁一半，与它画在哪无关 */}
-          <clipPath id={ids.halfClip} clipPathUnits="objectBoundingBox">
-            <rect x={0} y={0} width={0.5} height={1} />
-          </clipPath>
-        </defs>
+        <FingeringDefs ids={ids} />
 
         <rect x={vb.x} y={vb.y} width={vb.w} height={vb.h} fill={COLORS.paper} />
         {watermark && !snippet ? <Watermark text={watermark} /> : null}
@@ -147,7 +113,7 @@ export function ScoreSvg({
             hasLyrics={layout.hasLyrics}
             ambiguousPolicy={ambiguousPolicy}
             warnMeasures={warnMeasures}
-            hideFingering={snippet?.hideFingering ?? false}
+            hideFingering={snippet?.hideFingering || layout.omitFingering}
           />
         ))}
 
@@ -166,7 +132,10 @@ function snippetViewBox(page: Page, layout: Layout, opts: SnippetOptions) {
   if (!sys) return null
   const padX = 10
   const padY = 6
-  const bottom = opts.hideFingering ? layout.bands.lyricBaseline + 6 : layout.bands.fingerH + layout.bands.fingeringTop
+  const bottom =
+    opts.hideFingering || layout.omitFingering
+      ? layout.bands.lyricBaseline + 6
+      : layout.bands.fingerH + layout.bands.fingeringTop
   return {
     x: M.marginX - padX,
     y: sys.y,
@@ -334,6 +303,7 @@ function MeasureView({
   hideFingering: boolean
 }) {
   const bands = useBands()
+  const ids = useDefsIds()
   const m = lm.measure
   const markY = Math.max(bands.arcY - 10, 10)
 
@@ -423,9 +393,12 @@ function MeasureView({
             <FingeringColumn
               x={ln.x}
               top={bands.fingeringTop}
+              labelH={bands.fingerLabelH}
               holes={ln.fingering.holes}
-              ev={ln.ev}
+              degree={ln.ev.degree}
+              octave={ln.ev.octave}
               policy={ambiguousPolicy}
+              ids={ids}
             />
           ) : null}
         </Fragment>
@@ -671,129 +644,6 @@ function Barline({ x, kind }: { x: number; kind: 'single' | 'final' | 'repeatSta
       />
       <circle cx={dotsX} cy={top + (bottom - top) * 0.35} r={2} fill={COLORS.ink} />
       <circle cx={dotsX} cy={top + (bottom - top) * 0.65} r={2} fill={COLORS.ink} />
-    </g>
-  )
-}
-
-/* ---------------- 洞洞谱 ---------------- */
-
-/** 分段：[标签 + 第八~第五孔] / [第四~第二孔] / [第一孔]（与原图一致） */
-const SEGMENTS: number[][] = [
-  [0, 1, 2, 3],
-  [4, 5, 6],
-  [7],
-]
-
-/**
- * 第八孔（最上）与第一孔（最下）在原图里是向左错开画的，用来标出这两个孔的特殊；
- * 中间六个孔居中。holeIdx 0 = 第八孔，7 = 第一孔。
- */
-const EDGE_HOLES = new Set([0, 7])
-
-function holeCenterX(x: number, holeIdx: number): number {
-  return EDGE_HOLES.has(holeIdx) ? x - M.edgeHoleShift : x
-}
-
-function FingeringColumn({
-  x,
-  top,
-  holes,
-  ev,
-  policy,
-}: {
-  x: number
-  top: number
-  holes: Uint8Array
-  ev: NoteEvent
-  policy: AmbiguousPolicy
-}) {
-  const bands = useBands()
-  const left = x - M.fingerW / 2
-  const parts: JSX.Element[] = []
-  let y = top
-
-  SEGMENTS.forEach((seg, si) => {
-    const labelH = si === 0 ? bands.fingerLabelH : 0
-    const h = labelH + seg.length * M.fingerCellH
-    parts.push(
-      <rect key={`bg-${si}`} x={left} y={y} width={M.fingerW} height={h} fill={COLORS.tube} rx={2} />,
-    )
-
-    if (si === 0) {
-      // 唱名格已按全谱最大高音点数加高（见 computeBands），
-      // 基线跟着格高走，高音点就自然有地方画
-      const baseline = y + bands.fingerLabelH - 6
-      parts.push(
-        <text
-          key="label"
-          x={x}
-          y={baseline}
-          textAnchor="middle"
-          fontFamily={DIGIT_FONT}
-          fontSize={M.fingerLabelSize}
-          fontStyle="italic"
-          fontWeight={600}
-          fill={COLORS.ink}
-        >
-          {ev.degree}
-        </text>,
-      )
-      // 八度点画在唱名的正上方 / 正下方，与数字同一条竖线
-      const n = Math.abs(ev.octave)
-      for (let k = 0; k < n; k++) {
-        parts.push(
-          <circle
-            key={`od-${k}`}
-            cx={x}
-            cy={
-              ev.octave > 0
-                ? baseline - M.fingerLabelSize - 2 - k * M.octaveLabelStep
-                : baseline + 4 + k * M.octaveLabelStep
-            }
-            r={1.5}
-            fill={COLORS.ink}
-          />,
-        )
-      }
-    }
-
-    seg.forEach((holeIdx, hi) => {
-      const cy = y + labelH + hi * M.fingerCellH + M.fingerCellH / 2
-      parts.push(
-        <HoleGlyph
-          key={`h-${holeIdx}`}
-          cx={holeCenterX(x, holeIdx)}
-          cy={cy}
-          state={resolveHole(holes[holeIdx], policy)}
-        />,
-      )
-    })
-
-    y += h + M.fingerSepH
-  })
-
-  return <g>{parts}</g>
-}
-
-/** 按住 = 熊猫圆章（与原图一致）；半孔 = 只露左半个熊猫 */
-function HoleGlyph({ cx, cy, state }: { cx: number; cy: number; state: number }) {
-  const ids = useDefsIds()
-  const r = M.holeR
-
-  if (state === HOLE.OPEN) {
-    return <circle cx={cx} cy={cy} r={r} fill={COLORS.holeOpen} stroke={COLORS.holeEdge} strokeWidth={0.8} />
-  }
-
-  if (state === HOLE.CLOSED) {
-    return <circle cx={cx} cy={cy} r={r} fill={`url(#${ids.panda})`} />
-  }
-
-  // 半孔：白底圆 + 左半个熊猫 + 一圈描边
-  return (
-    <g>
-      <circle cx={cx} cy={cy} r={r} fill={COLORS.holeOpen} />
-      <circle cx={cx} cy={cy} r={r} fill={`url(#${ids.panda})`} clipPath={`url(#${ids.halfClip})`} />
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke={COLORS.ink} strokeWidth={0.9} />
     </g>
   )
 }

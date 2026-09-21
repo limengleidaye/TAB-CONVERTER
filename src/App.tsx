@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { BodyEditor } from './components/BodyEditor'
 import { ExportDialog } from './components/ExportDialog'
 import { HeaderForm } from './components/HeaderForm'
+import { PlayerDialog } from './components/PlayerDialog'
 import { TutorialDialog } from './components/TutorialDialog'
 import { buildDsl, splitDsl, type HeaderKey } from './core/dsl'
 import { deriveKeySignature } from './core/fingering/derive'
@@ -40,6 +41,7 @@ export default function App() {
 
   const [tutorialOpen, setTutorialOpen] = useState(() => !readTutorialSeen())
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [playerOpen, setPlayerOpen] = useState(false)
   const [watermark, setWatermark] = useState('')
   const [busy, setBusy] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
@@ -97,6 +99,8 @@ export default function App() {
   )
 
   const canExport = !!result.score && !!result.layout
+  // 播放前先过体检：有错误的谱子连时值都算不准，不给播
+  const canPlay = canExport && errors.length === 0
 
   return (
     <div className="app">
@@ -122,6 +126,13 @@ export default function App() {
             </select>
           </label>
           <button onClick={() => setTutorialOpen(true)}>教程</button>
+          <button
+            onClick={() => setPlayerOpen(true)}
+            disabled={!canPlay}
+            title={canPlay ? '跟着谱子播放（动态洞洞谱）' : '谱子有错误，修好才能播放'}
+          >
+            ▶ 播放
+          </button>
           <button className="primary" onClick={() => setDialogOpen(true)} disabled={!canExport}>
             导出…
           </button>
@@ -171,6 +182,16 @@ export default function App() {
       </main>
 
       {tutorialOpen ? <TutorialDialog onClose={closeTutorial} /> : null}
+
+      {playerOpen && result.score && result.layout ? (
+        <PlayerDialog
+          score={result.score}
+          layout={result.layout}
+          ambiguousPolicy={policy}
+          warnings={warnings}
+          onClose={() => setPlayerOpen(false)}
+        />
+      ) : null}
 
       {dialogOpen && result.layout ? (
         <ExportDialog
