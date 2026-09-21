@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { M, computeBands, layout } from '../src/core/layout'
 import { parse } from '../src/core/parser'
 import { compile } from '../src/core/pipeline'
-import { 为爱追寻, 落了白 } from '../src/samples'
+import { 为爱追寻, 落了白 } from '../src/samples/reference'
 
 /** 一个音的低音点最低能到哪 */
 function lowDotBottom(beams: number, lowOctave: number, digitBaseline: number): number {

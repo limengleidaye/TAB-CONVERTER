@@ -77,6 +77,22 @@ export function tongyinPitchClass(xiaoKey: string): number | null {
 }
 
 /**
+ * 调号文本（`1=C` / `1=♭B` / `1=bB`）→ 主音音高类。
+ * 简谱模式的播放音高由它定：中音 1 落在 C4~B4 这个八度里。
+ */
+export function keySignaturePitchClass(ks: string | null): number | null {
+  if (!ks) return null
+  const m = /^\s*1\s*=\s*(.+)$/.exec(ks)
+  if (!m) return null
+  const t = m[1].trim().replace(/♭/g, 'b').replace(/♯/g, '#')
+  const norm = /^([b#])?([A-Ga-g])$/.exec(t)
+  if (!norm) return null
+  const letter = norm[2].toUpperCase()
+  const acc = norm[1] ?? ''
+  return PITCH_CLASS[letter + acc] ?? PITCH_CLASS[acc + letter] ?? null
+}
+
+/**
  * 由 箫调 + 筒音作 推导调号主音。
  * 例：箫调 G → 筒音 D；筒音作 2 → 1 = D − 2 半音 = C。
  */

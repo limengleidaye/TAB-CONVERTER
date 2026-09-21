@@ -1,19 +1,18 @@
-import { useCallback, useMemo, useState } from 'react'
+/**
+ * 路由外壳。两个页面：谱库 `#/library` 与编辑器 `#/edit/<id>`。
+ *
+ * 自己解析 hash，不引路由库：统共两条路径，但前进/后退、刷新回到原处、
+ * 地址能收藏这几件事是真的需要——弹窗式的谱库做不到。
+ */
 
-import { BodyEditor } from './components/BodyEditor'
-import { ExportDialog } from './components/ExportDialog'
-import { HeaderForm } from './components/HeaderForm'
-import { PlayerDialog } from './components/PlayerDialog'
+import { useCallback, useEffect, useState } from 'react'
+
+import { EditorPage } from './components/EditorPage'
+import { LibraryPage } from './components/LibraryPage'
 import { TutorialDialog } from './components/TutorialDialog'
-import { buildDsl, splitDsl, type HeaderKey } from './core/dsl'
-import { deriveKeySignature } from './core/fingering/derive'
-import type { AmbiguousPolicy } from './core/fingering/table'
-import { compile } from './core/pipeline'
-import { exportScore, type ExportOptions } from './export/exporters'
-import { ScoreSvg } from './render/ScoreSvg'
-import { SAMPLES } from './samples'
+import { getScore, readLastOpened } from './store/library'
 
-const INITIAL = splitDsl(SAMPLES[0].dsl)
+type Route = { name: 'library' } | { name: 'edit'; id: string } | { name: 'resolving' }
 
 /** 首次打开自动弹教程；localStorage 在隐私模式下会抛错，一律兜住 */
 const TUTORIAL_SEEN_KEY = 'xiao-tab:tutorial-seen'
@@ -34,39 +33,48 @@ function markTutorialSeen(): void {
   }
 }
 
+function parseHash(hash: string): Route {
+  const m = /^#\/edit\/(.+)$/.exec(hash)
+  if (m) return { name: 'edit', id: decodeURIComponent(m[1]) }
+  if (hash === '#/library') return { name: 'library' }
+  // 空 hash：还不知道去哪，等下面那个 effect 查完上次打开的谱子再定
+  return { name: 'resolving' }
+}
+
 export default function App() {
-  const [fields, setFields] = useState(INITIAL.fields)
-  const [body, setBody] = useState(INITIAL.body)
-  const [policy, setPolicy] = useState<AmbiguousPolicy>('闭')
-
+  const [route, setRoute] = useState<Route>(() => parseHash(location.hash))
   const [tutorialOpen, setTutorialOpen] = useState(() => !readTutorialSeen())
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [playerOpen, setPlayerOpen] = useState(false)
-  const [watermark, setWatermark] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [exportError, setExportError] = useState<string | null>(null)
 
-  const result = useMemo(() => compile(buildDsl(fields, body)), [fields, body])
-  const errors = result.issues.filter((i) => i.severity === 'error')
-  const warnings = result.issues.filter((i) => i.severity === 'warning')
-
-  // 给「调号」输入框当占位提示用；箫调/筒音作 填得不对时为 null
-  const derivedKey = useMemo(() => {
-    const tone = /^([#b])?([1-7])$/.exec(fields.筒音作.trim())
-    if (!tone) return null
-    return deriveKeySignature(fields.箫调, Number(tone[2]), tone[1] as '#' | 'b' | undefined)
-  }, [fields.箫调, fields.筒音作])
-
-  const setField = useCallback((key: HeaderKey, value: string) => {
-    setFields((prev) => ({ ...prev, [key]: value }))
+  useEffect(() => {
+    const onHash = () => setRoute(parseHash(location.hash))
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
   }, [])
 
-  const loadSample = useCallback((name: string) => {
-    const s = SAMPLES.find((x) => x.name === name)
-    if (!s) return
-    const parts = splitDsl(s.dsl)
-    setFields(parts.fields)
-    setBody(parts.body)
+  // 直接进站（没有 hash）：上次打开的谱子还在就接着写，否则去谱库
+  useEffect(() => {
+    if (route.name !== 'resolving') return
+    let alive = true
+    const last = readLastOpened()
+    const settle = (hash: string) => {
+      if (!alive) return
+      location.replace(hash)
+      setRoute(parseHash(hash))
+    }
+    if (!last) {
+      settle('#/library')
+      return
+    }
+    getScore(last)
+      .then((rec) => settle(rec ? `#/edit/${encodeURIComponent(last)}` : '#/library'))
+      .catch(() => settle('#/library'))
+    return () => {
+      alive = false
+    }
+  }, [route.name])
+
+  const go = useCallback((hash: string) => {
+    location.hash = hash
   }, [])
 
   const closeTutorial = useCallback(() => {
@@ -74,135 +82,27 @@ export default function App() {
     markTutorialSeen()
   }, [])
 
-  const closeDialog = useCallback(() => {
-    setDialogOpen(false)
-    setWatermark('')
-    setExportError(null)
-  }, [])
-
-  const handleExport = useCallback(
-    async (opts: Omit<ExportOptions, 'ambiguousPolicy'>) => {
-      if (!result.score || !result.layout) return
-      setBusy(true)
-      setExportError(null)
-      try {
-        await exportScore(result.score, result.layout, { ...opts, ambiguousPolicy: policy })
-        setDialogOpen(false)
-        setWatermark('')
-      } catch (e) {
-        setExportError(e instanceof Error ? e.message : String(e))
-      } finally {
-        setBusy(false)
-      }
-    },
-    [result, policy],
-  )
-
-  const canExport = !!result.score && !!result.layout
-  // 播放前先过体检：有错误的谱子连时值都算不准，不给播
-  const canPlay = canExport && errors.length === 0
+  const openTutorial = useCallback(() => setTutorialOpen(true), [])
 
   return (
-    <div className="app">
-      <header className="topbar">
-        <h1>箫谱生成器</h1>
-        <div className="controls">
-          <label>
-            样例
-            <select value="" onChange={(e) => loadSample(e.target.value)}>
-              <option value="">载入…</option>
-              {SAMPLES.map((s) => (
-                <option key={s.name} value={s.name}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            ◎ 可开可闭
-            <select value={policy} onChange={(e) => setPolicy(e.target.value as AmbiguousPolicy)}>
-              <option value="闭">渲染成闭</option>
-              <option value="开">渲染成开</option>
-            </select>
-          </label>
-          <button onClick={() => setTutorialOpen(true)}>教程</button>
-          <button
-            onClick={() => setPlayerOpen(true)}
-            disabled={!canPlay}
-            title={canPlay ? '跟着谱子播放（动态洞洞谱）' : '谱子有错误，修好才能播放'}
-          >
-            ▶ 播放
-          </button>
-          <button className="primary" onClick={() => setDialogOpen(true)} disabled={!canExport}>
-            导出…
-          </button>
-        </div>
-      </header>
-
-      <main className="panes">
-        <section className="editor">
-          <HeaderForm fields={fields} onChange={setField} derivedKey={derivedKey} />
-
-          <div className="body-label">正文（音符流）　· 打 \ 弹出命令面板</div>
-          <BodyEditor value={body} onChange={setBody} />
-
-          <div className="issues">
-            {errors.length === 0 && warnings.length === 0 ? <p className="ok">无问题</p> : null}
-            {errors.map((i, k) => (
-              <p key={`e${k}`} className="error">
-                错误：{i.message}
-              </p>
-            ))}
-            {warnings.map((i, k) => (
-              <p key={`w${k}`} className="warn">
-                警告：{i.message}
-              </p>
-            ))}
-          </div>
-        </section>
-
-        <section className="preview">
-          {result.score && result.layout ? (
-            result.layout.pages.map((_, i) => (
-              <div className="page" key={i}>
-                <ScoreSvg
-                  score={result.score!}
-                  layout={result.layout!}
-                  pageIndex={i}
-                  watermark={watermark || undefined}
-                  ambiguousPolicy={policy}
-                  warnMeasures={dialogOpen ? undefined : result.warnMeasures}
-                />
-              </div>
-            ))
-          ) : (
-            <p className="empty">谱头有错误，无法渲染</p>
-          )}
-        </section>
-      </main>
+    <>
+      {route.name === 'edit' ? (
+        <EditorPage
+          key={route.id}
+          id={route.id}
+          onOpenTutorial={openTutorial}
+          onGoLibrary={() => go('#/library')}
+        />
+      ) : route.name === 'library' ? (
+        <LibraryPage
+          onOpenTutorial={openTutorial}
+          onOpen={(id) => go(`#/edit/${encodeURIComponent(id)}`)}
+        />
+      ) : (
+        <p className="page-note">读取中…</p>
+      )}
 
       {tutorialOpen ? <TutorialDialog onClose={closeTutorial} /> : null}
-
-      {playerOpen && result.score && result.layout ? (
-        <PlayerDialog
-          score={result.score}
-          layout={result.layout}
-          ambiguousPolicy={policy}
-          warnings={warnings}
-          onClose={() => setPlayerOpen(false)}
-        />
-      ) : null}
-
-      {dialogOpen && result.layout ? (
-        <ExportDialog
-          pageCount={result.layout.pages.length}
-          onWatermarkPreview={setWatermark}
-          onCancel={closeDialog}
-          onConfirm={handleExport}
-          busy={busy}
-          error={exportError}
-        />
-      ) : null}
-    </div>
+    </>
   )
 }

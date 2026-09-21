@@ -13,9 +13,11 @@ export interface HeaderFormProps {
   onChange: (key: HeaderKey, value: string) => void
   /** 由 箫调 + 筒音作 推导出的调号，作为「调号」留空时的占位提示 */
   derivedKey: string | null
+  /** 简谱模式下箫调/筒音作只影响不再显示的洞洞谱，收起来，调号改为直接填 */
+  jianpu?: boolean
 }
 
-export function HeaderForm({ fields, onChange, derivedKey }: HeaderFormProps) {
+export function HeaderForm({ fields, onChange, derivedKey, jianpu = false }: HeaderFormProps) {
   const set = (key: HeaderKey) => (e: { target: { value: string } }) => onChange(key, e.target.value)
 
   return (
@@ -35,6 +37,7 @@ export function HeaderForm({ fields, onChange, derivedKey }: HeaderFormProps) {
         <input value={fields.制谱} onChange={set('制谱')} placeholder="署名，渲染时自动加「制谱」二字" />
       </label>
 
+      {jianpu ? null : (
       <label>
         <span>箫调</span>
         <select value={fields.箫调} onChange={set('箫调')}>
@@ -45,7 +48,9 @@ export function HeaderForm({ fields, onChange, derivedKey }: HeaderFormProps) {
           ))}
         </select>
       </label>
+      )}
 
+      {jianpu ? null : (
       <label>
         <span>筒音作</span>
         <select value={fields.筒音作} onChange={set('筒音作')}>
@@ -56,6 +61,7 @@ export function HeaderForm({ fields, onChange, derivedKey }: HeaderFormProps) {
           ))}
         </select>
       </label>
+      )}
 
       <label>
         <span>拍号</span>
@@ -79,12 +85,12 @@ export function HeaderForm({ fields, onChange, derivedKey }: HeaderFormProps) {
         />
       </label>
 
-      <label>
+      <label className={jianpu ? 'wide' : undefined}>
         <span>调号</span>
         <input
           value={fields.调号}
           onChange={set('调号')}
-          placeholder={derivedKey ? `${derivedKey}（自动）` : '自动'}
+          placeholder={jianpu ? '如 1=C' : derivedKey ? `${derivedKey}（自动）` : '自动'}
         />
       </label>
     </div>

@@ -26,7 +26,7 @@ export function TutorialDialog({ onClose }: TutorialDialogProps) {
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div className="modal modal-tutorial" onMouseDown={(e) => e.stopPropagation()}>
         <header className="tut-head">
-          <h2>箫谱生成器 · 使用教程</h2>
+          <h2>竹谱 · 使用教程</h2>
           <button onClick={onClose} aria-label="关闭">
             ✕
           </button>

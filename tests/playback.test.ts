@@ -11,7 +11,7 @@ import {
   stepIndexAt,
   type Timeline,
 } from '../src/core/playback'
-import { 落了白 } from '../src/samples'
+import { 落了白 } from '../src/samples/reference'
 
 /** 拼一首最小的曲子；默认 G 调箫、筒音作 2、4/4、♩=60（一拍正好一秒，便于口算） */
 function line(body: string, header = ''): Timeline {

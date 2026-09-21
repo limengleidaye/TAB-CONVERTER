@@ -4,14 +4,19 @@ import { describe, expect, it } from 'vitest'
 
 import { PlayerDialog } from '../src/components/PlayerDialog'
 import { compile } from '../src/core/pipeline'
-import { 落了白 } from '../src/samples'
+import { 落了白 } from '../src/samples/reference'
 
-function markup(dsl: string, warnings: { severity: 'warning'; message: string }[] = []) {
-  const r = compile(dsl)
+function markup(
+  dsl: string,
+  warnings: { severity: 'warning'; message: string }[] = [],
+  mode: 'xiao' | 'jianpu' = 'xiao',
+) {
+  const r = compile(dsl, { omitFingering: mode === 'jianpu' })
   return renderToStaticMarkup(
     createElement(PlayerDialog, {
       score: r.score!,
       layout: r.layout!,
+      mode,
       ambiguousPolicy: '闭' as const,
       warnings,
       onClose: () => {},
@@ -52,6 +57,14 @@ describe('播放窗', () => {
     expect(html).toContain('仍然播放')
     expect(html).toContain('第 3 小节拍数不对')
     expect(html).not.toContain('player-strip')
+  })
+
+  it('简谱模式没有洞洞谱条，只剩谱面', () => {
+    const html = markup(落了白, [], 'jianpu')
+    expect(html).toContain('player-score')
+    expect(html).not.toContain('player-strip')
+    expect(html).not.toContain('player-card')
+    expect(html).toContain('钢琴')
   })
 
   it('谱头没写速度时如实告知', () => {

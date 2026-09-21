@@ -4,7 +4,7 @@
  */
 
 import { deriveKeySignature } from './fingering/derive'
-import { layout, type Layout } from './layout'
+import { layout, type Layout, type LayoutOptions } from './layout'
 import { parse } from './parser'
 import type { Issue, Score } from './types'
 import { validate } from './validate'
@@ -17,7 +17,7 @@ export interface CompileResult {
   warnMeasures: Set<number>
 }
 
-export function compile(src: string): CompileResult {
+export function compile(src: string, opts: LayoutOptions = {}): CompileResult {
   const { score, issues } = parse(src)
   if (!score) return { score: null, layout: null, issues, warnMeasures: new Set() }
 
@@ -33,5 +33,5 @@ export function compile(src: string): CompileResult {
     if (issue.measureIndex !== undefined) warnMeasures.add(issue.measureIndex)
   }
 
-  return { score, layout: layout(score, keySignature), issues: all, warnMeasures }
+  return { score, layout: layout(score, keySignature, opts), issues: all, warnMeasures }
 }

@@ -4,10 +4,12 @@
  * 上半：整页谱面，一个红框罩住当前正在吹的音，跟着速度走，行切换时自动滚动；
  * 下半：洞洞谱从右往左滑，中间一张最大 = 当前音，左右各两张是前两个 / 后两个。
  *
- * 两条铁律：
+ * 三条铁律：
  *   1. **时钟以音频为准**。画面每帧从 AudioContext.currentTime 反推位置，
  *      而不是各走各的 —— rAF 在后台标签页会停，两个时钟必然漂开，声画就对不上了。
- *   2. **谱面 SVG 不参与每帧重绘**。方框是一个绝对定位的 div，按页面元素实测尺寸换算，
+ *   2. **排期不挂在 rAF 上**，用定时器 + 两秒提前量。后台停掉的是 rAF，定时器只是被压慢，
+ *      提前量比那个间隔大就断不了音（见 LOOKAHEAD）。
+ *   3. **谱面 SVG 不参与每帧重绘**。方框是一个绝对定位的 div，按页面元素实测尺寸换算，
  *      整页上百个孔的 svg 只在开窗时渲染一次。
  */
 
@@ -22,6 +24,7 @@ import {
   buildTimeline,
   slideCursorAt,
   stepIndexAt,
+  type PlayMode,
   type PlayStep,
   type Timeline,
 } from '../core/playback'
@@ -29,8 +32,14 @@ import type { Issue, Score } from '../core/types'
 import { FingeringCard, cardViewBox } from '../render/FingeringCard'
 import { ScoreSvg } from '../render/ScoreSvg'
 
-/** 提前多少秒把音符排进音频时钟；太短会在卡顿时漏音，太长则拖动进度条的响应变钝 */
-const LOOKAHEAD = 0.25
+/**
+ * 提前多少秒把音符排进音频时钟。
+ * 必须大于浏览器在后台把定时器压慢的间隔（约 1 秒），否则一切到后台音就断。
+ */
+const LOOKAHEAD = 2
+
+/** 前台的排期节奏；后台会被压慢，靠 LOOKAHEAD 兜住 */
+const SCHEDULE_TICK = 120
 
 /**
  * 洞洞谱条里的尺寸**全部从条子的实测高度推出来**，不写死像素。
@@ -49,13 +58,22 @@ const RATES = [0.5, 0.75, 1, 1.25, 1.5] as const
 export interface PlayerDialogProps {
   score: Score
   layout: Layout
+  /** 箫谱：谱面下面跟一条滑动洞洞谱，用合成箫音；简谱：只有谱面，用钢琴音 */
+  mode: PlayMode
   ambiguousPolicy: AmbiguousPolicy
   /** 编译期的警告，开播前先让用户过一眼 */
   warnings: Issue[]
   onClose: () => void
 }
 
-export function PlayerDialog({ score, layout, ambiguousPolicy, warnings, onClose }: PlayerDialogProps) {
+export function PlayerDialog({
+  score,
+  layout,
+  mode,
+  ambiguousPolicy,
+  warnings,
+  onClose,
+}: PlayerDialogProps) {
   const [confirmed, setConfirmed] = useState(warnings.length === 0)
 
   useEffect(() => {
@@ -72,6 +90,7 @@ export function PlayerDialog({ score, layout, ambiguousPolicy, warnings, onClose
         <PlayerWindow
           score={score}
           layout={layout}
+          mode={mode}
           ambiguousPolicy={ambiguousPolicy}
           onClose={onClose}
         />
@@ -122,14 +141,18 @@ interface PageGeom {
 function PlayerWindow({
   score,
   layout,
+  mode,
   ambiguousPolicy,
   onClose,
 }: {
   score: Score
   layout: Layout
+  mode: PlayMode
   ambiguousPolicy: AmbiguousPolicy
   onClose: () => void
 }) {
+  const showStrip = mode === 'xiao'
+  const instrument = mode === 'xiao' ? 'xiao' : 'piano'
   const [bpm, setBpm] = useState(() =>
     score.header.速度 && score.header.速度 > 0 ? score.header.速度 : DEFAULT_BPM,
   )
@@ -153,8 +176,8 @@ function PlayerWindow({
   )
 
   const timeline = useMemo(
-    () => buildTimeline(score, playLayout, { baseBpm: bpm, rampAmount: ramp }),
-    [score, playLayout, bpm, ramp],
+    () => buildTimeline(score, playLayout, { baseBpm: bpm, rampAmount: ramp, mode }),
+    [score, playLayout, bpm, ramp, mode],
   )
 
   const audioRef = useRef<PlaybackAudio | null>(null)
@@ -212,7 +235,11 @@ function PlayerWindow({
     setTime(timeRef.current)
   }, [timeline])
 
-  // ---- 主循环：位置从音频时钟反推，顺手把未来 LOOKAHEAD 秒内的声音排进去 ----
+  // ---- 主循环：排期用定时器，画面用 rAF，位置都从音频时钟反推 ----
+  //
+  // 排期**不能**挂在 rAF 上：切到后台标签页浏览器就把 rAF 停了，没人再往音频时钟里排音，
+  // 已排的那点提前量放完就静音；切回来又会把这期间早该响的音一次性补排，全挤在一起炸响。
+  // 定时器在后台只是被压慢（约 1 秒一次），提前量比它大就断不了。
   useEffect(() => {
     if (!playing) return
 
@@ -220,38 +247,51 @@ function PlayerWindow({
     nextStepRef.current = firstAtOrAfter(timeline.steps, (s) => s.start, timeRef.current)
     nextClickRef.current = firstAtOrAfter(clicks, (c) => c.time, timeRef.current)
 
-    let raf = 0
-    const tick = () => {
+    /** 当前播放位置（秒），顺带写回 ref */
+    const position = () => {
       const t = Math.min(timeline.duration, (clockNow() - anchorRef.current) * rate)
       timeRef.current = t
-      setTime(t)
+      return t
+    }
 
+    const schedule = () => {
+      const t = position()
       const horizon = t + LOOKAHEAD * rate
       const steps = timeline.steps
       while (nextStepRef.current < steps.length && steps[nextStepRef.current].start < horizon) {
         const st = steps[nextStepRef.current++]
         if (sound && st.freq) {
-          audio.note(st.freq, anchorRef.current + st.start / rate, st.duration / rate)
+          audio.note(st.freq, anchorRef.current + st.start / rate, st.duration / rate, instrument)
         }
       }
       while (nextClickRef.current < clicks.length && clicks[nextClickRef.current].time < horizon) {
         const c = clicks[nextClickRef.current++]
         audio.click(anchorRef.current + c.time / rate, c.strong)
       }
-
+      // 收尾判定也放在这里：后台只有定时器还在跑
       if (t >= timeline.duration) {
+        setTime(t)
         setPlaying(false)
-        return
       }
-      raf = requestAnimationFrame(tick)
     }
 
-    raf = requestAnimationFrame(tick)
+    schedule()
+    const timer = setInterval(schedule, SCHEDULE_TICK)
+
+    // 画面：后台停掉正好省电，切回来按音频时钟重新对位即可
+    let raf = 0
+    const draw = () => {
+      setTime(position())
+      raf = requestAnimationFrame(draw)
+    }
+    raf = requestAnimationFrame(draw)
+
     return () => {
+      clearInterval(timer)
       cancelAnimationFrame(raf)
       audio.stopAll()
     }
-  }, [playing, rate, sound, clicks, timeline, audio, clockNow])
+  }, [playing, rate, sound, clicks, timeline, audio, clockNow, instrument])
 
   const toggle = useCallback(async () => {
     if (playing) {
@@ -402,6 +442,7 @@ function PlayerWindow({
         ) : null}
       </div>
 
+      {showStrip ? (
       <div className="player-strip" ref={stripRef}>
         <div
           className="player-strip-center"
@@ -427,6 +468,9 @@ function PlayerWindow({
         })}
         {counting > 0 ? <div className="player-countdown">{counting}</div> : null}
       </div>
+      ) : counting > 0 ? (
+        <div className="player-countdown player-countdown-overlay">{counting}</div>
+      ) : null}
 
       <div className="player-bar">
         <button className="primary" onClick={() => void toggle()}>
@@ -482,7 +526,7 @@ function PlayerWindow({
 
         <label>
           <input type="checkbox" checked={sound} onChange={(e) => setSound(e.target.checked)} />
-          箫声
+          {mode === 'xiao' ? '箫声' : '钢琴'}
         </label>
         <label>
           <input type="checkbox" checked={metro} onChange={(e) => setMetro(e.target.checked)} />

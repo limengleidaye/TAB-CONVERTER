@@ -8,7 +8,7 @@ import { M } from '../src/core/layout'
 import { compile } from '../src/core/pipeline'
 import { renderPageSvg } from '../src/export/exporters'
 import { PANDA_HOLE_PNG } from '../src/render/panda'
-import { 为爱追寻, 落了白 } from '../src/samples'
+import { 为爱追寻, 落了白 } from '../src/samples/reference'
 
 function svgOf(dsl: string, watermark = '') {
   const r = compile(dsl)

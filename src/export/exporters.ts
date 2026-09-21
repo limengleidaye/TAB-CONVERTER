@@ -118,7 +118,8 @@ async function svgToPngDataUrl(svg: string, scale: number): Promise<string> {
   return canvas.toDataURL('image/png')
 }
 
-function download(blob: Blob, name: string): void {
+/** 触发一次浏览器下载。谱库页导出 .txt / .json 也走这里 */
+export function download(blob: Blob, name: string): void {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

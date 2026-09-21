@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { parse } from '../src/core/parser'
 import { compile } from '../src/core/pipeline'
-import { 为爱追寻, 落了白 } from '../src/samples'
+import { 为爱追寻, 落了白 } from '../src/samples/reference'
 
 const HEAD = `标题: T
 箫调: G

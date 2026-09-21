@@ -11,7 +11,12 @@
  * 幅度做成参数（rampAmount），播放窗里可调。
  */
 
-import { tongyinPitchClass, type FingeringLookup } from './fingering/derive'
+import {
+  keySignaturePitchClass,
+  semitoneOf,
+  tongyinPitchClass,
+  type FingeringLookup,
+} from './fingering/derive'
 import { M, type Bands, type LaidMeasure, type LaidNote, type Layout } from './layout'
 import type { NoteEvent, Score } from './types'
 
@@ -83,7 +88,16 @@ export interface Timeline {
   expanded: boolean
 }
 
+/**
+ * 播放的两种口径：
+ * - `xiao`：音高按箫来——距筒音多少个半音，筒音音名由箫调定（G 调箫筒音 = D4）；
+ * - `jianpu`：音高只看调号，中音 1 落在 C4~B4，与乐器无关。
+ */
+export type PlayMode = 'xiao' | 'jianpu'
+
 export interface TimelineOptions {
+  /** 默认按箫 */
+  mode?: PlayMode
   /** 基准 BPM，优先于谱头的 `速度:`（播放窗里可以当场改） */
   baseBpm?: number
   /** accel. / rit. 的渐变幅度，0.3 = ±30% */
@@ -152,6 +166,8 @@ export function buildTimeline(score: Score, layout: Layout, opts: TimelineOption
 
   // ---- 4. 时间、方框、音高 ----
   const tongyinPc = tongyinPitchClass(score.header.箫调)
+  // 简谱模式下箫调/筒音作与音高无关，主音直接从调号取
+  const tonicPc = opts.mode === 'jianpu' ? keySignaturePitchClass(layout.keySignature) : null
   const steps: PlayStep[] = []
   let t = 0
   groups.forEach((g, i) => {
@@ -170,7 +186,7 @@ export function buildTimeline(score: Score, layout: Layout, opts: TimelineOption
       start: t,
       duration,
       bpm: bpms[i],
-      freq: frequencyOf(head.ln.fingering, ev, tongyinPc),
+      freq: frequencyOf(head.ln.fingering, ev, tongyinPc, tonicPc),
       fingering: head.ln.fingering,
       holes: head.ln.showFingering ? (head.ln.fingering?.holes ?? null) : null,
       box: boxOf(g, layout.bands),
@@ -347,17 +363,27 @@ function boxOf(g: FlatNote[], bands: Bands): PlayBox {
 
 /**
  * 绝对音高。
- * `lookupFingering` 给的 index 就是「距筒音的半音数」，而筒音的音名由箫调决定
- * （G 调箫筒音 = D，F 调箫筒音 = C），取中央 C 往上的那个八度：G 调箫筒音 = D4。
+ *
+ * 箫：`lookupFingering` 给的 index 就是「距筒音的半音数」，筒音音名由箫调决定
+ * （G 调箫筒音 = D，F 调箫筒音 = C），取中央 C 往上那个八度——G 调箫筒音 = D4。
+ * 简谱：与乐器无关，中音 1 就落在 C4~B4 这个八度里，其余音按调式半音数推。
  */
 function frequencyOf(
   fingering: FingeringLookup | null,
   ev: NoteEvent,
   tongyinPc: number | null,
+  tonicPc: number | null,
 ): number | null {
-  if (ev.type !== 'note' || !fingering || tongyinPc === null) return null
-  const midi = 60 + tongyinPc + fingering.index
-  if (midi < 36 || midi > 108) return null
+  if (ev.type !== 'note') return null
+
+  const midi =
+    tonicPc !== null
+      ? 60 + tonicPc + semitoneOf(ev.degree, ev.octave, ev.accidental)
+      : fingering && tongyinPc !== null
+        ? 60 + tongyinPc + fingering.index
+        : null
+
+  if (midi === null || midi < 36 || midi > 108) return null
   return 440 * Math.pow(2, (midi - 69) / 12)
 }
 

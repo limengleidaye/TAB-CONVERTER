@@ -1,6 +1,6 @@
 /**
- * 开发用：把样例渲染成 PNG，便于与原图逐格比对。
- *   npx tsx scripts/render-png.mts            # 全部样例
+ * 开发用：把**验收基线谱**渲染成 PNG，便于与原谱图逐格比对。
+ *   npx tsx scripts/render-png.mts            # 两首都渲
  *   npx tsx scripts/render-png.mts 落了白      # 指定一首
  * 输出到 out/<曲名>-p<页码>.png
  */
@@ -13,13 +13,13 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 import { compile } from '../src/core/pipeline'
 import { ScoreSvg } from '../src/render/ScoreSvg'
-import { SAMPLES } from '../src/samples'
+import { REFERENCE_SCORES } from '../src/samples/reference'
 
 const outDir = join(import.meta.dirname, '..', 'out')
 mkdirSync(outDir, { recursive: true })
 
 const only = process.argv[2]
-const targets = only ? SAMPLES.filter((s) => s.name === only) : SAMPLES
+const targets = only ? REFERENCE_SCORES.filter((s) => s.name === only) : REFERENCE_SCORES
 
 for (const sample of targets) {
   const result = compile(sample.dsl)
