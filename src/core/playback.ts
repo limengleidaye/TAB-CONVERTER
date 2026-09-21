@@ -223,33 +223,63 @@ export function expandRepeats(slots: Slot[]): number[] {
   let i = 0
   let sectionStart = 0
   let pass = 1
+  /** 上一小节是不是房子号里的（含被跳过的那些） */
+  let inVolta = false
   const limit = slots.length * MAX_EXPAND_FACTOR
 
   while (i < slots.length && out.length < limit) {
     const m = slots[i].lm.measure
+    const hasVolta = m.volta !== undefined
+
+    /*
+     * 走完一组房子号 = 这一段反复到此结束，遍数必须归位。
+     * 少了这一步，第二段反复会**带着上一段的遍数**开场，它的一房就被整段跳掉——
+     * 曲子里只要有两段反复，第二段就永远从二房进。
+     */
+    if (!hasVolta && inVolta) {
+      sectionStart = i
+      pass = 1
+    }
+    inVolta = hasVolta
 
     // 进入一个新的反复段才重置遍数；回跳落回段首时 i === sectionStart，不会误重置
-    if (m.openBarline === 'repeatStart' && i > sectionStart) {
+    if (m.openBarline === 'repeatStart' && i !== sectionStart) {
       sectionStart = i
       pass = 1
     }
 
     // 不属于本遍的房子号整小节跳过（[1. 在第二遍略过，[2. 在第一遍略过）
-    if (m.volta !== undefined && m.volta !== pass) {
+    if (hasVolta && m.volta !== pass) {
       i++
       continue
     }
 
     out.push(i)
 
-    if (m.closeBarline === 'repeatEnd' && pass === 1) {
-      pass = 2
+    if (m.closeBarline === 'repeatEnd' && pass < passesOf(slots, sectionStart, i)) {
+      pass++
       i = sectionStart
+      inVolta = false
       continue
     }
     i++
   }
   return out
+}
+
+/**
+ * 这一段要走几遍：默认两遍；写了三房就是三遍。
+ * 房子号可能写在 `:|` 前面（一房），也可能跟在后面（二房、三房），两头都要数。
+ */
+function passesOf(slots: Slot[], sectionStart: number, repeatEndIdx: number): number {
+  let maxVolta = 1
+  for (let k = sectionStart; k < slots.length; k++) {
+    const v = slots[k].lm.measure.volta
+    // 反复线之后，房子号一断就说明这一段结束了
+    if (k > repeatEndIdx && v === undefined) break
+    if (v !== undefined && v > maxVolta) maxVolta = v
+  }
+  return Math.max(2, maxVolta)
 }
 
 /**
