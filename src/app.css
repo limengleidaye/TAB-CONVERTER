@@ -630,10 +630,14 @@ button.primary:hover:not(:disabled) {
 }
 
 /* 洞洞谱滑动条：卡片全部绝对定位在中线上，靠 transform 拉开 */
+/*
+ * 按比例分一块给条子，而不是写死高度：
+ * 固定像素在页面放大时会越占越多（可视高度变小、它却照旧），上下的比例就跑了。
+ */
 .player-strip {
   position: relative;
-  flex: 0 0 auto;
-  height: 296px;
+  flex: 0 0 38%;
+  min-height: 170px;
   background: linear-gradient(#fbf7f0, #f2ece1);
   border-top: 1px solid #e3e3e0;
   overflow: hidden;
@@ -643,8 +647,7 @@ button.primary:hover:not(:disabled) {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 80px;
-  height: 272px;
+  /* 宽高由 JS 按卡片实际尺寸给，见 PlayerDialog */
   transform: translate(-50%, -50%);
   border-radius: 10px;
   background: rgba(232, 84, 31, 0.08);
@@ -655,7 +658,8 @@ button.primary:hover:not(:disabled) {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 66px;
+  /* 高度由 JS 按条子高度给，宽度让 svg 的长宽比自己撑出来 */
+  width: auto;
   /* 位置每帧由 JS 直接写 transform，这里不能加 transition，否则会拖后腿 */
   will-change: transform;
 }
@@ -666,7 +670,7 @@ button.primary:hover:not(:disabled) {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 96px;
+  font-size: clamp(48px, 16vh, 140px);
   font-weight: 700;
   color: rgba(232, 84, 31, 0.75);
   background: rgba(255, 253, 248, 0.72);

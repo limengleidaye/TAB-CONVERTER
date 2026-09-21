@@ -26,14 +26,20 @@ import {
   type Timeline,
 } from '../core/playback'
 import type { Issue, Score } from '../core/types'
-import { FingeringCard } from '../render/FingeringCard'
+import { FingeringCard, cardViewBox } from '../render/FingeringCard'
 import { ScoreSvg } from '../render/ScoreSvg'
 
 /** 提前多少秒把音符排进音频时钟；太短会在卡顿时漏音，太长则拖动进度条的响应变钝 */
 const LOOKAHEAD = 0.25
 
-/** 洞洞谱条：相邻两张卡的中心间距（px），以及两侧卡相对中间的大小 */
-const CARD_PITCH = 82
+/**
+ * 洞洞谱条里的尺寸**全部从条子的实测高度推出来**，不写死像素。
+ * 写死的话页面一放大，条子按 CSS 像素照常占位、可视高度却变小，上下的比例就跑了。
+ */
+const CARD_H_RATIO = 0.84
+/** 相邻两张卡的中心距 = 卡片宽度 × 这个系数 */
+const CARD_GAP_RATIO = 1.3
+/** 两侧卡相对中间那张的大小 */
 const SIDE_SCALE = 0.76
 /** 最多往两边各铺几张（再多也出了屏） */
 const MAX_HALF = 9
@@ -135,7 +141,7 @@ function PlayerWindow({
   const [playing, setPlaying] = useState(false)
   const [time, setTime] = useState(0)
   const [geom, setGeom] = useState<PageGeom[]>([])
-  const [stripW, setStripW] = useState(0)
+  const [strip, setStrip] = useState({ w: 900, h: 280 })
 
   /**
    * 播放窗自己排一份**不带洞洞谱**的谱面：下半条已经是洞洞谱了，上面再来一遍纯属重复，
@@ -307,11 +313,11 @@ function PlayerWindow({
     return () => ro.disconnect()
   }, [playLayout])
 
-  // 条子多宽就铺多少张，不多画也不留空
+  // 条子多大，卡片就多大、铺多少张
   useEffect(() => {
     const el = stripRef.current
     if (!el) return
-    const measure = () => setStripW(el.clientWidth)
+    const measure = () => setStrip({ w: el.clientWidth, h: el.clientHeight })
     measure()
     const ro = new ResizeObserver(measure)
     ro.observe(el)
@@ -357,7 +363,13 @@ function PlayerWindow({
 
   const box = current?.box
   const g = box ? geom[box.page] : undefined
-  const half = Math.min(MAX_HALF, Math.ceil((stripW || 900) / 2 / CARD_PITCH) + 1)
+
+  // 卡片高度取条子高度的固定比例，宽度由洞洞谱一列自身的长宽比反推
+  const cardH = Math.max(80, strip.h * CARD_H_RATIO)
+  const shape = cardViewBox(current?.ev.octave ?? 0)
+  const cardW = (cardH * shape.w) / shape.h
+  const pitch = cardW * CARD_GAP_RATIO
+  const half = Math.min(MAX_HALF, Math.ceil(strip.w / 2 / pitch) + 1)
 
   return (
     <div className="player">
@@ -391,7 +403,10 @@ function PlayerWindow({
       </div>
 
       <div className="player-strip" ref={stripRef}>
-        <div className="player-strip-center" />
+        <div
+          className="player-strip-center"
+          style={{ width: cardW + 14, height: cardH + 16 }}
+        />
         {visibleCards(timeline, cursor, half).map(({ step, rel }) => {
           // 只有中间那张大，两侧一律同一个尺寸；离中心越远越小会看得人发晕
           const near = Math.max(0, 1 - Math.abs(rel))
@@ -401,7 +416,8 @@ function PlayerWindow({
               key={step.index}
               className="player-card"
               style={{
-                transform: `translate(-50%, -50%) translateX(${(rel * CARD_PITCH).toFixed(1)}px) scale(${scale.toFixed(3)})`,
+                height: cardH,
+                transform: `translate(-50%, -50%) translateX(${(rel * pitch).toFixed(1)}px) scale(${scale.toFixed(3)})`,
                 zIndex: near > 0.5 ? 10 : 5,
               }}
             >

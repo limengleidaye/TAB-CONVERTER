@@ -41,8 +41,8 @@ export const FingeringCard = memo(function FingeringCard({
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
-      width="100%"
-      style={{ display: 'block', overflow: 'visible' }}
+      /* 高度由外层给定，宽度交给 viewBox 的长宽比——页面缩放时卡片整张一起缩 */
+      style={{ display: 'block', height: '100%', width: 'auto', overflow: 'visible' }}
     >
       <FingeringDefs ids={ids} />
       {step.holes ? (
