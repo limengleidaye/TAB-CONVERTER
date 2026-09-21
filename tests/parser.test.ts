@@ -91,21 +91,21 @@ describe('音高', () => {
 
 describe('歌词', () => {
   it('内联中文紧跟音符', () => {
-    expect(notesOf('1隐 2去 |').map((n) => n.lyric)).toEqual(['隐', '去'])
+    expect(notesOf('1隐 2去 |').map((n) => n.lyrics?.[0])).toEqual(['隐', '去'])
   })
 
   it('一个音可带多字', () => {
-    expect(notesOf('5离别 |')[0].lyric).toBe('离别')
+    expect(notesOf('5离别 |')[0].lyrics).toEqual(['离别'])
   })
 
   it('引号包裹拉丁词块', () => {
-    expect(notesOf('5"la la" |')[0].lyric).toBe('la la')
+    expect(notesOf('5"la la" |')[0].lyrics).toEqual(['la la'])
   })
 
   it('拖腔：后续音不写字', () => {
     const ns = notesOf('(1解 6_) |')
-    expect(ns[0].lyric).toBe('解')
-    expect(ns[1].lyric).toBeUndefined()
+    expect(ns[0].lyrics).toEqual(['解'])
+    expect(ns[1].lyrics).toBeUndefined()
   })
 
   it('休止符带歌词报错', () => {
@@ -292,7 +292,7 @@ describe('验收样例', () => {
     const r = compile(落了白)
     expect(r.issues.filter((i) => i.severity === 'error')).toEqual([])
     expect(r.score!.measures).toHaveLength(17)
-    expect(r.score!.hasLyrics).toBe(true)
+    expect(r.score!.verseCount).toBe(1)
     expect(r.score!.measures.at(-1)!.closeBarline).toBe('final')
   })
 
@@ -315,14 +315,14 @@ describe('验收样例', () => {
     const r = compile(落了白)
     const m13 = r.score!.measures[12]
     expect(m13.notes[0].graces?.map((g) => g.degree)).toEqual([3, 2])
-    expect(m13.notes[0].lyric).toBe('奈')
+    expect(m13.notes[0].lyrics).toEqual(['奈'])
   })
 
   it('《为爱追寻》：9 小节，无歌词，每小节 4 拍', () => {
     const r = compile(为爱追寻)
     expect(r.issues.filter((i) => i.severity === 'error')).toEqual([])
     expect(r.score!.measures).toHaveLength(9)
-    expect(r.score!.hasLyrics).toBe(false)
+    expect(r.score!.verseCount).toBe(0)
     for (const m of r.score!.measures) expect(m.beats, `第 ${m.index} 小节`).toBe(4)
   })
 

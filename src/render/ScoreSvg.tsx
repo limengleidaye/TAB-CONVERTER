@@ -19,7 +19,7 @@ import {
   type System,
   type TupletSeg,
 } from '../core/layout'
-import type { NoteEvent, Score } from '../core/types'
+import type { Meter, NoteEvent, Score } from '../core/types'
 import { COLORS, DIGIT_FONT, TEXT_FONT } from './colors'
 import {
   FingeringColumn,
@@ -36,7 +36,7 @@ const FALLBACK_BANDS: Bands = {
   digitBaseline: 44,
   digitsBottom: 58,
   fermataY: 16,
-  lyricBaseline: 58,
+  lyricBaselines: [],
   fingeringTop: 72,
   fingerLabelH: M.fingerLabelHBase,
   fingerH: M.fingerLabelHBase + M.fingerCellH * 8 + M.fingerSepH * 2,
@@ -110,7 +110,7 @@ export function ScoreSvg({
           <SystemView
             key={i}
             system={sys}
-            hasLyrics={layout.hasLyrics}
+            verseCount={layout.verseCount}
             ambiguousPolicy={ambiguousPolicy}
             warnMeasures={warnMeasures}
             hideFingering={snippet?.hideFingering || layout.omitFingering}
@@ -126,15 +126,20 @@ export function ScoreSvg({
   )
 }
 
+function lastOf(xs: number[], fallback: number): number {
+  return xs.length > 0 ? xs[xs.length - 1] : fallback
+}
+
 /** 片段模式的裁剪框：贴着第一行谱的实际内容，左右各留一点边 */
 function snippetViewBox(page: Page, layout: Layout, opts: SnippetOptions) {
   const sys = page.systems[0]
   if (!sys) return null
-  const padX = 10
+  // 多段歌词时左边要多留一截，给行首的段号
+  const padX = layout.verseCount > 1 ? 28 : 10
   const padY = 6
   const bottom =
     opts.hideFingering || layout.omitFingering
-      ? layout.bands.lyricBaseline + 6
+      ? lastOf(layout.bands.lyricBaselines, layout.bands.digitsBottom) + 6
       : layout.bands.fingerH + layout.bands.fingeringTop
   return {
     x: M.marginX - padX,
@@ -248,24 +253,25 @@ function Watermark({ text }: { text: string }) {
 
 function SystemView({
   system,
-  hasLyrics,
+  verseCount,
   ambiguousPolicy,
   warnMeasures,
   hideFingering,
 }: {
   system: System
-  hasLyrics: boolean
+  verseCount: number
   ambiguousPolicy: AmbiguousPolicy
   warnMeasures?: Set<number>
   hideFingering: boolean
 }) {
   return (
     <g transform={`translate(0 ${system.y})`}>
+      <VerseNumbers verseCount={verseCount} />
       {system.measures.map((lm) => (
         <MeasureView
           key={lm.measure.index}
           lm={lm}
-          hasLyrics={hasLyrics}
+          verseCount={verseCount}
           ambiguousPolicy={ambiguousPolicy}
           warn={warnMeasures?.has(lm.measure.index) ?? false}
           hideFingering={hideFingering}
@@ -291,13 +297,13 @@ const MARK_GLYPH: Record<string, string> = { Segno: '%', Coda: '\u2295' }
 
 function MeasureView({
   lm,
-  hasLyrics,
+  verseCount,
   ambiguousPolicy,
   warn,
   hideFingering,
 }: {
   lm: LaidMeasure
-  hasLyrics: boolean
+  verseCount: number
   ambiguousPolicy: AmbiguousPolicy
   warn: boolean
   hideFingering: boolean
@@ -374,21 +380,28 @@ function MeasureView({
 
       {m.openBarline === 'repeatStart' ? <Barline x={lm.x - 8} kind="repeatStart" /> : null}
 
+      {m.meterChanged ? <MeterGlyph x={lm.x + M.meterW / 2} meter={m.meter} /> : null}
+
       {lm.notes.map((ln, i) => (
         <Fragment key={i}>
           <NoteGlyph ln={ln} />
-          {hasLyrics && ln.ev.lyric ? (
-            <text
-              x={ln.x}
-              y={bands.lyricBaseline}
-              textAnchor="middle"
-              fontFamily={TEXT_FONT}
-              fontSize={M.lyricSize}
-              fill={COLORS.ink}
-            >
-              {ln.ev.lyric}
-            </text>
-          ) : null}
+          {verseCount > 0 && ln.ev.lyrics
+            ? ln.ev.lyrics.map((text, vi) =>
+                text ? (
+                  <text
+                    key={`v${vi}`}
+                    x={ln.x}
+                    y={bands.lyricBaselines[vi]}
+                    textAnchor="middle"
+                    fontFamily={TEXT_FONT}
+                    fontSize={M.lyricSize}
+                    fill={COLORS.ink}
+                  >
+                    {text}
+                  </text>
+                ) : null,
+              )
+            : null}
           {!hideFingering && ln.showFingering && ln.fingering?.holes ? (
             <FingeringColumn
               x={ln.x}
@@ -405,6 +418,64 @@ function MeasureView({
       ))}
 
       <Barline x={lm.barX} kind={m.closeBarline} />
+    </g>
+  )
+}
+
+/** 多段歌词时，每行行首标上段号；只有一段就不标 */
+function VerseNumbers({ verseCount }: { verseCount: number }) {
+  const bands = useBands()
+  if (verseCount < 2) return null
+  return (
+    <g>
+      {bands.lyricBaselines.map((y, vi) => (
+        <text
+          key={vi}
+          x={M.marginX - 8}
+          y={y}
+          textAnchor="end"
+          fontFamily={DIGIT_FONT}
+          fontSize={M.lyricSize - 4}
+          fill={COLORS.ink}
+        >
+          {`${vi + 1}.`}
+        </text>
+      ))}
+    </g>
+  )
+}
+
+/**
+ * 曲中变拍号：上下叠的两个数字，画在小节最左边。
+ * 字号比简谱数字小，分母压在数字基线上、分子紧贴其上——
+ * 这样整个分数正好落在数字那一带里，不会顶到上面的弧线或下面的减时线。
+ */
+function MeterGlyph({ x, meter }: { x: number; meter: Meter }) {
+  const bands = useBands()
+  return (
+    <g>
+      <text
+        x={x}
+        y={bands.digitBaseline - M.meterSize}
+        textAnchor="middle"
+        fontFamily={DIGIT_FONT}
+        fontSize={M.meterSize}
+        fontWeight={700}
+        fill={COLORS.ink}
+      >
+        {meter.beats}
+      </text>
+      <text
+        x={x}
+        y={bands.digitBaseline}
+        textAnchor="middle"
+        fontFamily={DIGIT_FONT}
+        fontSize={M.meterSize}
+        fontWeight={700}
+        fill={COLORS.ink}
+      >
+        {meter.unit}
+      </text>
     </g>
   )
 }

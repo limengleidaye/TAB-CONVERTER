@@ -45,7 +45,8 @@ export interface NoteEvent {
   groupPath: number[]
   /** 时值，单位为四分音符（拍） */
   duration: number
-  lyric?: string
+  /** 各段歌词；`1长/韶` 写两段。段位对齐靠数组下标，与音符绑死（§3.11） */
+  lyrics?: string[]
   graces?: Grace[]
   tempoMark?: TempoMark
   /**
@@ -66,6 +67,12 @@ export interface NoteEvent {
   span: [number, number]
 }
 
+/** 拍号：beats 分之 unit，如 3/4 */
+export interface Meter {
+  beats: number
+  unit: number
+}
+
 export type BarlineKind = 'single' | 'final' | 'repeatStart' | 'repeatEnd'
 
 /** 段落记号：D.C. / D.S. / Fine / Coda / Segno */
@@ -80,6 +87,10 @@ export interface Measure {
   closeBarline: BarlineKind
   /** 房子号（[1. [2.） */
   volta?: number
+  /** 本小节生效的拍号；曲中 \meter 变过之后跟着变（§3.10.1） */
+  meter: Meter
+  /** 本小节是变拍号的起点：谱面要在小节头画出拍号，校验与打拍也从这里换算 */
+  meterChanged: boolean
   marks: SectionMark[]
   /** 实际拍数（四分音符为 1） */
   beats: number
@@ -95,7 +106,8 @@ export interface Header {
   筒音作Accidental?: Accidental
   /** 省略时由 箫调 + 筒音作 推导（§6.5） */
   调号?: string
-  拍号: { beats: number; unit: number }
+  /** 全曲起始拍号；曲中可用 \meter 改（§3.10.1） */
+  拍号: Meter
   /** 全曲基准 BPM；省略则谱头不显示速度项（§3.9） */
   速度?: number
 }
@@ -103,8 +115,8 @@ export interface Header {
 export interface Score {
   header: Header
   measures: Measure[]
-  /** 全曲是否有歌词，决定是否渲染歌词行（§7） */
-  hasLyrics: boolean
+  /** 全曲有几段歌词，决定渲染几行歌词行（§7）；0 = 无词 */
+  verseCount: number
 }
 
 export type IssueSeverity = 'error' | 'warning'

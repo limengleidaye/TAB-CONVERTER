@@ -49,13 +49,19 @@ export const M = {
    */
   edgeHoleShift: 5,
 
-  /** 简谱行底部（含减时线与低音点）到歌词基线的净空 */
+  /** 简谱行底部（含减时线与低音点）到第一行歌词基线的净空 */
   lyricClearance: 6,
+  /** 两行歌词之间的净空（多段歌词） */
+  lyricGap: 3,
   /** 歌词基线到洞洞谱顶部 */
   lyricToFinger: 8,
   /** 无歌词时，简谱行底部到洞洞谱顶部 */
   digitsToFinger: 14,
   systemPadBottom: 14,
+
+  /** 曲中变拍号时，小节头给那个分数留出的横向字位 */
+  meterW: 22,
+  meterSize: 13,
 
   measureGap: 14,
   groupGap: 8,
@@ -137,8 +143,8 @@ export interface Bands {
   digitBaseline: number
   /** 简谱行最底部（减时线与低音点都算在内） */
   digitsBottom: number
-  /** 歌词基线；无歌词时等于 digitsBottom */
-  lyricBaseline: number
+  /** 各段歌词的基线，自上而下；无歌词时为空数组 */
+  lyricBaselines: number[]
   /** 洞洞谱顶部 */
   fingeringTop: number
   /** 指法列顶部唱名格的高度（高音点多时会变高） */
@@ -151,7 +157,8 @@ export interface Bands {
 
 export interface Layout {
   pages: Page[]
-  hasLyrics: boolean
+  /** 有几段歌词；0 = 无词 */
+  verseCount: number
   /** 这份布局不画洞洞谱（播放窗用：上下都是洞洞谱就重复了） */
   omitFingering: boolean
   keySignature: string | null
@@ -173,7 +180,7 @@ interface ContentExtent {
   maxHighOctave: number
   hasTempo: boolean
   hasFermata: boolean
-  hasLyrics: boolean
+  verseCount: number
 }
 
 function measureExtent(score: Score): ContentExtent {
@@ -182,7 +189,7 @@ function measureExtent(score: Score): ContentExtent {
   let maxHighOctave = 0
   let hasTempo = false
   let hasFermata = false
-  let hasLyrics = false
+  let verseCount = 0
 
   for (const m of score.measures) {
     for (const n of m.notes) {
@@ -191,14 +198,14 @@ function measureExtent(score: Score): ContentExtent {
       if (n.octave > 0 && n.octave > maxHighOctave) maxHighOctave = n.octave
       if (n.tempoMark) hasTempo = true
       if (n.fermata) hasFermata = true
-      if (n.lyric) hasLyrics = true
+      if (n.lyrics) verseCount = Math.max(verseCount, n.lyrics.length)
       // 倚音自带八度点，也要算进上方净空
       for (const g of n.graces ?? []) {
         if (g.octave > 0 && g.octave > maxHighOctave) maxHighOctave = g.octave
       }
     }
   }
-  return { maxBeams, maxLowOctave, maxHighOctave, hasTempo, hasFermata, hasLyrics }
+  return { maxBeams, maxLowOctave, maxHighOctave, hasTempo, hasFermata, verseCount }
 }
 
 export function computeBands(ext: ContentExtent, omitFingering = false): Bands {
@@ -231,14 +238,22 @@ export function computeBands(ext: ContentExtent, omitFingering = false): Bands {
       : 0
   const digitsBottom = Math.max(beamBottom, lowDotBottom)
 
-  const lyricBaseline = ext.hasLyrics ? digitsBottom + M.lyricClearance + M.lyricSize : digitsBottom
-  const fingeringTop = ext.hasLyrics ? lyricBaseline + M.lyricToFinger : digitsBottom + M.digitsToFinger
+  // 多段歌词逐行往下叠；行数由内容决定，指法带跟着被顶下去
+  const lyricBaselines: number[] = []
+  let lyricY = digitsBottom
+  for (let v = 0; v < ext.verseCount; v++) {
+    lyricY += (v === 0 ? M.lyricClearance : M.lyricGap) + M.lyricSize
+    lyricBaselines.push(lyricY)
+  }
+  const lyricsBottom = lyricBaselines.length > 0 ? lyricBaselines[lyricBaselines.length - 1] : digitsBottom
+  const fingeringTop =
+    lyricBaselines.length > 0 ? lyricsBottom + M.lyricToFinger : digitsBottom + M.digitsToFinger
 
   // 指法列顶部的唱名格：高音点画在数字上方，点越多这一格越高
   const fingerLabelH = omitFingering ? 0 : M.fingerLabelHBase + ext.maxHighOctave * M.octaveLabelStep
   const fingerH = omitFingering ? 0 : fingerLabelH + M.fingerCellH * 8 + M.fingerSepH * 2
   const systemHeight = omitFingering
-    ? (ext.hasLyrics ? lyricBaseline + 6 : digitsBottom) + M.systemPadBottom
+    ? (lyricBaselines.length > 0 ? lyricsBottom + 6 : digitsBottom) + M.systemPadBottom
     : fingeringTop + fingerH + M.systemPadBottom
 
   return {
@@ -247,7 +262,7 @@ export function computeBands(ext: ContentExtent, omitFingering = false): Bands {
     arcY,
     digitBaseline,
     digitsBottom,
-    lyricBaseline,
+    lyricBaselines,
     fingeringTop,
     fingerLabelH,
     fingerH,
@@ -256,7 +271,7 @@ export function computeBands(ext: ContentExtent, omitFingering = false): Bands {
 }
 
 export function layout(score: Score, keySignature: string | null, opts: LayoutOptions = {}): Layout {
-  const hasLyrics = score.hasLyrics
+  const verseCount = score.verseCount
   const omitFingering = !!opts.omitFingering
   const bands = computeBands(measureExtent(score), omitFingering)
   const contentW = M.pageW - M.marginX * 2
@@ -308,6 +323,8 @@ export function layout(score: Score, keySignature: string | null, opts: LayoutOp
     let cursor = M.marginX
     for (const lm of measures) {
       lm.x = cursor
+      // 变拍号画在小节最左边，音符从它右边起排
+      if (lm.measure.meterChanged) cursor += M.meterW
       lm.notes.forEach((ln, i) => {
         const w = ln.width + pad
         ln.x = cursor + w / 2
@@ -351,12 +368,12 @@ export function layout(score: Score, keySignature: string | null, opts: LayoutOp
   }
   if (cur.length > 0) pages.push({ systems: cur })
 
-  return { pages, hasLyrics, omitFingering, keySignature, bands, metrics: M }
+  return { pages, verseCount, omitFingering, keySignature, bands, metrics: M }
 }
 
-/** 小节未对齐时的自然宽度：各音宽 + 梁分组间隙 + 小节间隙 */
+/** 小节未对齐时的自然宽度：各音宽 + 梁分组间隙 + 小节间隙（+ 变拍号的字位） */
 function measureNaturalWidth(lm: LaidMeasure): number {
-  let w = M.measureGap
+  let w = M.measureGap + (lm.measure.meterChanged ? M.meterW : 0)
   lm.notes.forEach((ln, i) => {
     w += ln.width
     const next = lm.notes[i + 1]
@@ -368,7 +385,9 @@ function measureNaturalWidth(lm: LaidMeasure): number {
 function noteWidth(ev: NoteEvent, showFingering: boolean): number {
   let w = M.minNoteW
   if (showFingering) w = Math.max(w, M.fingerW + 4)
-  if (ev.lyric) w = Math.max(w, ev.lyric.length * (M.lyricSize + 1) + 4)
+  // 取最长的那一段：几段词共用同一列宽度
+  const longest = Math.max(0, ...(ev.lyrics ?? []).map((t) => t.length))
+  if (longest > 0) w = Math.max(w, longest * (M.lyricSize + 1) + 4)
   if (ev.dotted) w += 8
   if (ev.graces?.length) w += ev.graces.length * 12
   return w

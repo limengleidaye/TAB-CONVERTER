@@ -116,6 +116,30 @@ describe('纯简谱模式', () => {
     expect(tl.steps[0].freq!).toBeCloseTo(293.66, 1) // D4
   })
 
+  it('调号与箫调不一致时，简谱模式不该拿箫来卡', () => {
+    // 1=F 的简谱配 D 调箫筒音作4（推导出 1=E）：箫谱模式该警告，简谱模式不该
+    const src = '标题: 测试\n调号: 1=F\n箫调: D\n筒音作: 4\n拍号: 4/4\n\n1 2 3 4 |'
+    expect(compile(src).issues.map((i) => i.message)).toContain(
+      '「调号:1=F」与 箫调D + 筒音作4 推导出的 1=E 不一致',
+    )
+    expect(compile(src, { omitFingering: true }).issues).toEqual([])
+  })
+
+  it('超出箫音域的音，简谱模式也不该报——谱面上根本没有箫', () => {
+    const src = '标题: 测试\n调号: 1=C\n箫调: G\n筒音作: 2\n拍号: 4/4\n\n1__ 2 3 4 |'
+    expect(compile(src).issues.map((i) => i.message).join()).toMatch(/超出八孔箫音域/)
+    expect(compile(src, { omitFingering: true }).issues).toEqual([])
+  })
+
+  it('简谱模式下，调号和箫调都没有才提示', () => {
+    const noKey = '标题: 测试\n箫调: 火星调\n筒音作: 2\n拍号: 4/4\n\n1 2 3 4 |'
+    expect(compile(noKey, { omitFingering: true }).issues.map((i) => i.message).join()).toMatch(
+      /没写「调号」/,
+    )
+    const hasKey = '标题: 测试\n调号: 1=C\n箫调: 火星调\n筒音作: 2\n拍号: 4/4\n\n1 2 3 4 |'
+    expect(compile(hasKey, { omitFingering: true }).issues).toEqual([])
+  })
+
   it('箫模式仍按箫的音域走：G 调箫中音 1 在 C5', () => {
     const src = '标题: 测试\n箫调: G\n筒音作: 2\n拍号: 4/4\n速度: 60\n\n1 2 3 4 |'
     const r = compile(src)
@@ -147,7 +171,7 @@ describe('示例曲目', () => {
     expect(notes.some((n) => n.slurStart)).toBe(true)
     expect(notes.some((n) => n.graces?.length)).toBe(true)
     expect(notes.some((n) => n.tupletStart)).toBe(true)
-    expect(notes.some((n) => n.lyric)).toBe(true)
+    expect(notes.some((n) => n.lyrics)).toBe(true)
     expect(notes.some((n) => n.fermata)).toBe(true)
     expect(notes.some((n) => n.tempoMark)).toBe(true)
     expect(r.score!.measures.some((m) => m.volta)).toBe(true)

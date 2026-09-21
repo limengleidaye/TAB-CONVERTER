@@ -50,7 +50,7 @@ npm run dev      # 打开 http://localhost:5173
 「加进我的谱库」拿一份照着改，是最快的上手方式。
 
 ```bash
-npm test         # 228 个单测
+npm test         # 269 个单测
 npm run build    # 产出 dist/
 ```
 
@@ -164,7 +164,7 @@ src/
     library.ts       本地谱库：IndexedDB + 导入导出（纯逻辑与 IDB 分开写）
   components/        谱库页、编辑器页、谱头表单、正文编辑器、教程/导出/播放弹窗
   export/            PNG / SVG / PDF
-tests/               228 个单测
+tests/               269 个单测
 需求文档.md          完整 PRD，含所有设计决策的来由
 八孔洞箫指法表.md    权威指法表原始数据
 ```

@@ -18,7 +18,7 @@ import {
   type FingeringLookup,
 } from './fingering/derive'
 import { M, type Bands, type LaidMeasure, type LaidNote, type Layout } from './layout'
-import type { NoteEvent, Score } from './types'
+import type { Meter, NoteEvent, Score } from './types'
 
 /** 谱头没写 `速度:` 时的兜底 BPM */
 export const DEFAULT_BPM = 72
@@ -80,9 +80,9 @@ export interface Timeline {
   baseBpm: number
   /** 谱头 `速度:` 写了多少；没写为 null */
   headerBpm: number | null
-  /** 一小节几拍，预备拍用 */
+  /** 起始小节一小节几拍，预备拍用 */
   beatsPerMeasure: number
-  /** 一拍 = 几个四分音符（6/8 拍时为 0.5） */
+  /** 起始小节一拍 = 几个四分音符（6/8 拍时为 0.5） */
   quartersPerBeat: number
   /** 反复是否真的展开出了额外小节 */
   expanded: boolean
@@ -194,15 +194,19 @@ export function buildTimeline(score: Score, layout: Layout, opts: TimelineOption
     t += duration
   })
 
-  const quartersPerBeat = 4 / score.header.拍号.unit
+  // 曲中可以变拍号，拍点得按每小节自己的拍号算
+  const meters = new Map<number, Meter>()
+  for (const m of score.measures) meters.set(m.index, m.meter)
+  const firstMeter = score.measures[0]?.meter ?? score.header.拍号
+
   return {
     steps,
-    beats: collectBeats(steps, quartersPerBeat, score.header.拍号.beats),
+    beats: collectBeats(steps, meters, firstMeter),
     duration: t,
     baseBpm,
     headerBpm,
-    beatsPerMeasure: score.header.拍号.beats,
-    quartersPerBeat,
+    beatsPerMeasure: firstMeter.beats,
+    quartersPerBeat: 4 / firstMeter.unit,
     expanded: order.length > slots.length,
   }
 }
@@ -297,53 +301,60 @@ function nextMarkAfter(marks: (unknown | undefined)[], i: number): number {
 }
 
 /**
- * 节拍点：在每一步内部按拍位线性插值（步内 BPM 恒定，所以是准的）。
- * 小节头上的那一拍算重拍，**弱起的第一小节除外**——引子那几拍本来就是上一小节借来的，
+ * 节拍点：**逐小节**数，拍位在小节内从 0 开始。
+ * 这样曲中变拍号（一拍等于几个四分音符跟着变）不会把整条拍位网格顶歪，
+ * 而且「第 0 拍 = 重拍」这条规则直接成立，不必再去比对小节头的绝对拍位。
+ *
+ * 唯一的例外是**弱起的第一小节**：引子那几拍本来就是从上一小节借来的，
  * 把它敲成重拍，整首的强弱就错开一格了。
  */
-function collectBeats(steps: PlayStep[], quartersPerBeat: number, beatsPerMeasure: number): BeatMark[] {
+function collectBeats(steps: PlayStep[], meters: Map<number, Meter>, firstMeter: Meter): BeatMark[] {
   const beats: BeatMark[] = []
-  const measureHeads = new Set<number>()
-  let beatPos = 0
+  const pickup = isPickup(steps, firstMeter)
+
+  let posInMeasure = 0
   let lastMeasure = -1
   let lastPass = 0
-
-  const pickup = isPickup(steps, quartersPerBeat, beatsPerMeasure)
+  let firstMeasure = true
 
   for (const st of steps) {
     // 反复第二遍会再次走到同一个小节号，遍数一起比才认得出「新的一小节」
     if (st.measureIndex !== lastMeasure || st.pass !== lastPass) {
-      if (!(pickup && beatPos === 0)) measureHeads.add(round6(beatPos))
+      if (lastMeasure !== -1) firstMeasure = false
+      posInMeasure = 0
       lastMeasure = st.measureIndex
       lastPass = st.pass
     }
+
+    const quartersPerBeat = 4 / (meters.get(st.measureIndex) ?? firstMeter).unit
     const quarters = st.covers.reduce((s, ev) => s + ev.duration, 0)
     const len = quarters / quartersPerBeat
     if (len <= 0) continue
 
-    const from = beatPos
-    const to = beatPos + len
+    const from = posInMeasure
+    const to = posInMeasure + len
     for (let k = Math.ceil(from - 1e-6); k < to - 1e-6; k++) {
       beats.push({
         time: st.start + ((k - from) / len) * st.duration,
-        strong: measureHeads.has(round6(k)),
+        strong: k === 0 && !(firstMeasure && pickup),
       })
     }
-    beatPos = to
+    posInMeasure = to
   }
   return beats
 }
 
 /** 第一小节是不是弱起（拍数不足） */
-function isPickup(steps: PlayStep[], quartersPerBeat: number, beatsPerMeasure: number): boolean {
+function isPickup(steps: PlayStep[], meter: Meter): boolean {
   const first = steps[0]
   if (!first) return false
+  const quartersPerBeat = 4 / meter.unit
   let len = 0
   for (const st of steps) {
     if (st.measureIndex !== first.measureIndex || st.pass !== first.pass) break
     len += st.covers.reduce((sum, ev) => sum + ev.duration, 0) / quartersPerBeat
   }
-  return len < beatsPerMeasure - 1e-6
+  return len < meter.beats - 1e-6
 }
 
 /**
@@ -428,6 +439,3 @@ export function cursorAt(timeline: Timeline, time: number): number {
   return i + Math.min(1, Math.max(0, (time - st.start) / st.duration))
 }
 
-function round6(n: number): number {
-  return Math.round(n * 1e6) / 1e6
-}

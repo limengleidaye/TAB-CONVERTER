@@ -31,11 +31,13 @@ describe('命令表', () => {
 
   it('每条命令恰好归一类，不会两头落空也不会兼任', () => {
     for (const c of DSL_COMMANDS) {
-      // fermata 既不是变速也不是段落：它是加在音符上的演奏法，单独一类
+      // fermata 既不是变速也不是段落：它是加在音符上的演奏法，单独一类。
+      // meter 同理，它改的是小节的容量，不是速度。
       const kinds = [
         tempoOf(c.name, 88) !== null,
         sectionOf(c.name) !== null,
         c.name === 'fermata',
+        c.name === 'meter',
       ].filter(Boolean)
       expect(kinds, c.name).toHaveLength(1)
     }

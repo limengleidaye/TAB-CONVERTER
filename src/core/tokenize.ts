@@ -3,8 +3,8 @@
  * 头部（键值对）由 parseHeader 单独处理，这里只切正文音符流。
  */
 
-import { findCommand, sectionOf, tempoOf } from './commands'
-import type { Accidental, TempoMark } from './types'
+import { findCommand, parseMeter, sectionOf, tempoOf } from './commands'
+import type { Accidental, Meter, TempoMark } from './types'
 
 export type TokenKind =
   | 'note' // 音符 / 休止符
@@ -21,6 +21,7 @@ export type TokenKind =
   | 'repeatStart' // |:
   | 'repeatEnd' // :|
   | 'volta' // [1.  [2.
+  | 'meter' // \meter=3/4 曲中变拍号
   | 'tempo' // 速度=88 / 渐快 / 渐慢 / 原速 / 延长
   | 'section' // D.C. / D.S. / Fine / Coda / %
   | 'fermata' // 自由延长，加在前一个音上
@@ -36,11 +37,14 @@ export interface Token {
   dotted?: boolean
   /** 后缀 ~：与下一个音相连（延音线） */
   tie?: boolean
-  lyric?: string
+  /** 各段歌词，`/` 分段 */
+  lyrics?: string[]
   /* tuplet */
   tupletN?: number
   /* volta */
   volta?: number
+  /* meter */
+  meter?: Meter
   /* tempo */
   tempo?: TempoMark
   /* section */
@@ -155,7 +159,8 @@ export function tokenize(src: string): TokenizeResult {
 
     // 反斜杠命令：\rit \dc \tempo=88 …
     if (ch === '\\') {
-      const m = /^\\([A-Za-z]+)(?:\s*=\s*(\d+))?/.exec(src.slice(i))
+      // 值部分收成字符串：\tempo=88 要数字，\meter=3/4 要分数，各自校验
+      const m = /^\\([A-Za-z]+)(?:\s*=\s*(\d+(?:\s*\/\s*\d+)?))?/.exec(src.slice(i))
       const cmd = m ? findCommand(m[1]) : undefined
       if (!m || !cmd) {
         const end = m ? i + m[0].length : i + 1
@@ -164,9 +169,23 @@ export function tokenize(src: string): TokenizeResult {
         continue
       }
       const raw = m[0]
-      const value = m[2] === undefined ? undefined : Number(m[2])
+      const rawValue = m[2]
+      const value = rawValue !== undefined && /^\d+$/.test(rawValue) ? Number(rawValue) : undefined
       if (cmd.name === 'tempo' && value === undefined) {
         errors.push({ message: '\\tempo 要带数值，例如 \\tempo=88', span: [i, i + raw.length] })
+        i += raw.length
+        continue
+      }
+      if (cmd.name === 'meter') {
+        const meter = parseMeter(rawValue)
+        if (!meter) {
+          errors.push({
+            message: '\\meter 要带拍号，例如 \\meter=3/4（分母只能是 2 4 8 16）',
+            span: [i, i + raw.length],
+          })
+        } else {
+          push({ kind: 'meter', span: [i, i + raw.length], raw, meter })
+        }
         i += raw.length
         continue
       }
@@ -262,24 +281,47 @@ export function tokenize(src: string): TokenizeResult {
     const note = /^([#bn])?([0-7])(\^+|_+)?(\.)?(~)?/.exec(src.slice(i))
     if (note && note[2] !== undefined) {
       let j = i + note[0].length
-      let lyric: string | undefined
 
-      // 歌词：紧跟的中文字串，或 "..." 包裹的任意词块
-      if (src[j] === '"') {
-        const end = src.indexOf('"', j + 1)
-        if (end === -1) {
-          errors.push({ message: '歌词引号未闭合', span: [j, src.length] })
-          j = src.length
-        } else {
-          lyric = src.slice(j + 1, end)
+      /** 一段歌词：紧跟的中文字串，或 "..." 包裹的任意词块 */
+      const readVerse = (): string | undefined => {
+        if (src[j] === '"') {
+          const end = src.indexOf('"', j + 1)
+          if (end === -1) {
+            errors.push({ message: '歌词引号未闭合', span: [j, src.length] })
+            j = src.length
+            return undefined
+          }
+          const text = src.slice(j + 1, end)
           j = end + 1
+          return text
         }
-      } else {
         let k = j
         while (k < src.length && LYRIC_CHAR.test(src[k])) k++
-        if (k > j) {
-          lyric = src.slice(j, k)
-          j = k
+        if (k === j) return undefined
+        const text = src.slice(j, k)
+        j = k
+        return text
+      }
+
+      // 多段歌词用 / 分段：`1长/韶`。
+      // 分隔符在引号**外面**——引号保护内容，所以 `1"a/b"` 是一段带斜杠的词，
+      // 英文段各自加引号即可：`1"la la"/"na na"`。
+      let lyrics: string[] | undefined
+      const firstVerse = readVerse()
+      if (firstVerse !== undefined) {
+        lyrics = [firstVerse]
+        while (src[j] === '/') {
+          const slashAt = j
+          j++
+          const next = readVerse()
+          if (next === undefined) {
+            errors.push({
+              message: '"/" 后面要接下一段歌词，例如 1长/韶',
+              span: [slashAt, j],
+            })
+            break
+          }
+          lyrics.push(next)
         }
       }
 
@@ -296,7 +338,7 @@ export function tokenize(src: string): TokenizeResult {
         octave,
         dotted: note[4] === '.',
         tie: note[5] === '~',
-        lyric,
+        lyrics,
       })
       i = j
       continue

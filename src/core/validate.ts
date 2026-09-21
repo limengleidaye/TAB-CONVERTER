@@ -6,12 +6,23 @@ import { lookupFingering } from './fingering/derive'
 import { deriveKeySignature } from './fingering/derive'
 import type { Issue, Score } from './types'
 
-export function validate(score: Score): Issue[] {
-  const issues: Issue[] = []
-  const { 拍号, 筒音作, 筒音作Accidental, 箫调, 调号 } = score.header
+export interface ValidateOptions {
+  /**
+   * 这份谱是不是给箫看的（要画洞洞谱）。
+   * 纯简谱模式下 箫调 / 筒音作 只剩「推导调号」这一个用处，
+   * 音域、调号一致性都不该再拿箫来卡——谱面上根本没有箫。
+   */
+  forXiao?: boolean
+}
 
-  // 一拍 = 一个 unit 音符；以四分音符为 1 的内部时值需要换算
-  const beatsPerMeasure = 拍号.beats * (4 / 拍号.unit)
+export function validate(score: Score, opts: ValidateOptions = {}): Issue[] {
+  const forXiao = opts.forXiao ?? true
+  const issues: Issue[] = []
+  const { 筒音作, 筒音作Accidental, 箫调, 调号 } = score.header
+
+  /** 一拍 = 一个 unit 音符；以四分音符为 1 的内部时值需要换算。曲中变拍号后逐小节算 */
+  const expectedOf = (m: { meter: { beats: number; unit: number } }) =>
+    m.meter.beats * (4 / m.meter.unit)
 
   /**
    * 拍数校验（§4.1）。豁免规则分两个方向——早先一刀切地放过首尾小节，
@@ -23,10 +34,11 @@ export function validate(score: Score): Issue[] {
    *   因为收尾少的那部分正是开头借走的；开头是满拍却在结尾少拍，多半是漏音。
    */
   const total = score.measures.length
-  const firstBeats = score.measures[0]?.beats ?? 0
-  const hasPickup = total > 1 && firstBeats < beatsPerMeasure - 1e-6
+  const first = score.measures[0]
+  const hasPickup = total > 1 && !!first && first.beats < expectedOf(first) - 1e-6
 
   score.measures.forEach((m, i) => {
+    const beatsPerMeasure = expectedOf(m)
     const diff = m.beats - beatsPerMeasure
     if (Math.abs(diff) <= 1e-6) return
 
@@ -54,6 +66,18 @@ export function validate(score: Score): Issue[] {
       measureIndex: m.index,
     })
   })
+
+  // 下面全是箫的事：纯简谱到此为止
+  if (!forXiao) {
+    // 调号没写时才回落到 箫调 + 筒音作 去推，这时候箫调认不出来就真的没调号可显示了
+    if (!score.header.调号 && !deriveKeySignature(箫调, 筒音作, 筒音作Accidental)) {
+      issues.push({
+        severity: 'warning',
+        message: `没写「调号」，「箫调:${箫调}」又认不出来，谱头将不显示调号`,
+      })
+    }
+    return issues
+  }
 
   // 音域校验：查表 index 越界
   for (const m of score.measures) {

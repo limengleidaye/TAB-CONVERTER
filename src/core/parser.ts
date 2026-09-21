@@ -11,6 +11,7 @@ import type {
   Header,
   Issue,
   Measure,
+  Meter,
   NoteEvent,
   ParseResult,
   SectionMark,
@@ -26,14 +27,18 @@ export function parse(src: string): ParseResult {
   const { headerText, bodyText, bodyOffset } = splitSections(src)
 
   const header = parseHeader(headerText, issues)
-  const body = parseBody(bodyText, bodyOffset, issues)
+  // 谱头的拍号是全曲起始拍号；曲中 \meter 从这个值往后改
+  const body = parseBody(bodyText, bodyOffset, issues, header?.拍号 ?? { beats: 4, unit: 4 })
 
   if (!header) return { score: null, issues }
 
   const score: Score = {
     header,
     measures: body.measures,
-    hasLyrics: body.measures.some((m) => m.notes.some((n) => n.lyric)),
+    verseCount: body.measures.reduce(
+      (n, m) => Math.max(n, ...m.notes.map((ev) => ev.lyrics?.length ?? 0)),
+      0,
+    ),
   }
   return { score, issues }
 }
@@ -135,7 +140,7 @@ interface BodyResult {
 }
 
 /** 正文解析：括号层级 = 减时线层数与梁分组；大括号 = 弧线；尖括号 = 倚音 */
-function parseBody(text: string, offset: number, issues: Issue[]): BodyResult {
+function parseBody(text: string, offset: number, issues: Issue[], initialMeter: Meter): BodyResult {
   const { tokens, errors } = tokenize(text)
   for (const e of errors) {
     issues.push({ severity: 'error', message: e.message, span: shift(e.span, offset) })
@@ -147,6 +152,9 @@ function parseBody(text: string, offset: number, issues: Issue[]): BodyResult {
   let openBarline: BarlineKind | null = null
   let volta: number | undefined
   let marks: SectionMark[] = []
+  /** 当前生效的拍号，以及本小节是不是变拍号的起点 */
+  let meter: Meter = initialMeter
+  let meterChanged = false
 
   // 括号层级：groupStack[L] 为第 L+1 层减时线的分组 id
   const groupStack: number[] = []
@@ -174,6 +182,8 @@ function parseBody(text: string, offset: number, issues: Issue[]): BodyResult {
       openBarline,
       closeBarline: close,
       volta,
+      meter,
+      meterChanged,
       marks,
       beats: round(beats),
       span: shift([measureStart, end], offset),
@@ -182,6 +192,7 @@ function parseBody(text: string, offset: number, issues: Issue[]): BodyResult {
     openBarline = close === 'repeatEnd' ? null : null
     volta = undefined
     marks = []
+    meterChanged = false
     measureStart = end
   }
 
@@ -260,7 +271,7 @@ function parseBody(text: string, offset: number, issues: Issue[]): BodyResult {
           beams: depth,
           groupPath: [...groupStack],
           duration: tk.dotted ? base * 1.5 : base,
-          lyric: tk.lyric,
+          lyrics: tk.lyrics,
           graces: pendingGraces,
           tempoMark: pendingTempo,
           tiedFromPrev: pendingTie,
@@ -288,7 +299,7 @@ function parseBody(text: string, offset: number, issues: Issue[]): BodyResult {
         }
         pendingTie = !!tk.tie
         prevTieSource = tk.tie ? ev : null
-        if (tk.lyric && tk.degree === 0) {
+        if (tk.lyrics && tk.degree === 0) {
           issues.push({
             severity: 'error',
             message: '休止符不能带歌词',
@@ -364,6 +375,19 @@ function parseBody(text: string, offset: number, issues: Issue[]): BodyResult {
 
       case 'section':
         marks.push(tk.section as SectionMark)
+        break
+
+      case 'meter':
+        // 变拍号作用于**整个当前小节**。写在小节中间时意图就含糊了，给个警告。
+        if (current.length > 0) {
+          issues.push({
+            severity: 'warning',
+            message: '变拍号写在了小节中间，已按整小节生效——请写在小节开头',
+            span: shift(tk.span, offset),
+          })
+        }
+        meter = tk.meter!
+        meterChanged = true
         break
 
       case 'volta':

@@ -9,9 +9,9 @@
  * 而且记号得靠记忆硬打。反斜杠既无歧义，又能触发补全面板。
  */
 
-import type { TempoMark } from './types'
+import type { Meter, TempoMark } from './types'
 
-export type CommandCategory = '变速' | '段落'
+export type CommandCategory = '变速' | '段落' | '拍号'
 
 export interface DslCommand {
   /** 反斜杠后面的名字 */
@@ -51,6 +51,15 @@ export const DSL_COMMANDS: DslCommand[] = [
     desc: '自由延长，加在前一个音上',
     category: '变速',
   },
+  {
+    name: 'meter',
+    insert: '\\meter=3/4',
+    render: '3/4',
+    desc: '曲中变拍号，写在小节开头',
+    category: '拍号',
+    caretOffset: 7,
+    selectLength: 3,
+  },
   { name: 'segno', insert: '\\segno', render: '%', desc: '返回记号（D.S. 跳回这里）', category: '段落' },
   { name: 'coda', insert: '\\coda', render: '⊕', desc: '尾声记号', category: '段落' },
   { name: 'dc', insert: '\\dc', render: 'D.C.', desc: '从头反复', category: '段落' },
@@ -85,6 +94,18 @@ export function tempoOf(name: string, value?: number): TempoMark | null {
     default:
       return null
   }
+}
+
+/** `3/4` → 拍号；写法不对则返回 null */
+export function parseMeter(raw: string | undefined): Meter | null {
+  const m = /^\s*(\d+)\s*\/\s*(\d+)\s*$/.exec(raw ?? '')
+  if (!m) return null
+  const beats = Number(m[1])
+  const unit = Number(m[2])
+  // 分母必须是 2 的幂：简谱的时值体系里没有「三分音符」
+  if (beats < 1 || beats > 32) return null
+  if (![1, 2, 4, 8, 16, 32].includes(unit)) return null
+  return { beats, unit }
 }
 
 /** 命令 → 段落记号；不是段落命令则返回 null */

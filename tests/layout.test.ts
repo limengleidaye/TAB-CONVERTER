@@ -21,12 +21,12 @@ describe('竖向分带不重叠', () => {
     const { bands } = r.layout!
     const notes = r.score!.measures.flatMap((m) => m.notes)
 
-    const lyricTop = bands.lyricBaseline - M.lyricSize
+    const lyricTop = (bands.lyricBaselines[0] ?? Infinity) - M.lyricSize
     for (const n of notes) {
       if (n.octave >= 0) continue
       const bottom = lowDotBottom(n.beams, -n.octave, bands.digitBaseline)
       expect(bottom, '低音点不得越过简谱行底线').toBeLessThanOrEqual(bands.digitsBottom + 0.01)
-      if (r.layout!.hasLyrics) {
+      if (r.layout!.verseCount > 0) {
         expect(bottom, '低音点不得压到歌词字形').toBeLessThanOrEqual(lyricTop)
       }
       expect(bottom, '低音点不得压到洞洞谱').toBeLessThan(bands.fingeringTop)
@@ -42,8 +42,8 @@ describe('竖向分带不重叠', () => {
     const maxBeams = Math.max(...r.score!.measures.flatMap((m) => m.notes.map((n) => n.beams)))
     const beamBottom = bands.digitBaseline + M.beamGap + maxBeams * M.beamStep + M.beamThickness
     expect(beamBottom).toBeLessThanOrEqual(bands.digitsBottom + 0.01)
-    if (r.layout!.hasLyrics) {
-      expect(beamBottom).toBeLessThanOrEqual(bands.lyricBaseline - M.lyricSize)
+    if (r.layout!.verseCount > 0) {
+      expect(beamBottom).toBeLessThanOrEqual(bands.lyricBaselines[0] - M.lyricSize)
     }
   })
 
@@ -54,7 +54,7 @@ describe('竖向分带不重叠', () => {
       maxHighOctave: 0,
       hasTempo: false,
       hasFermata: false,
-      hasLyrics: false,
+      verseCount: 0,
     })
     const high = computeBands({
       maxBeams: 1,
@@ -62,7 +62,7 @@ describe('竖向分带不重叠', () => {
       maxHighOctave: 2,
       hasTempo: false,
       hasFermata: false,
-      hasLyrics: false,
+      verseCount: 0,
     })
     expect(high.digitBaseline).toBeGreaterThan(plain.digitBaseline)
 
@@ -73,21 +73,21 @@ describe('竖向分带不重叠', () => {
 
   it('有变速记号时才给它留位置', () => {
     const without = computeBands({
-      maxBeams: 0, maxLowOctave: 0, maxHighOctave: 0, hasTempo: false, hasFermata: false, hasLyrics: false,
+      maxBeams: 0, maxLowOctave: 0, maxHighOctave: 0, hasTempo: false, hasFermata: false, verseCount: 0,
     })
     const withTempo = computeBands({
-      maxBeams: 0, maxLowOctave: 0, maxHighOctave: 0, hasTempo: true, hasFermata: false, hasLyrics: false,
+      maxBeams: 0, maxLowOctave: 0, maxHighOctave: 0, hasTempo: true, hasFermata: false, verseCount: 0,
     })
     expect(withTempo.digitBaseline - without.digitBaseline).toBe(M.tempoBand)
     expect(withTempo.tempoY).toBeLessThan(withTempo.arcY)
   })
 
   it('减时线越多、低音点越多，行越高', () => {
-    const base = { maxHighOctave: 0, hasTempo: false, hasFermata: false, hasLyrics: true }
+    const base = { maxHighOctave: 0, hasTempo: false, hasFermata: false, verseCount: 1 }
     const shallow = computeBands({ ...base, maxBeams: 1, maxLowOctave: 1 })
     const deep = computeBands({ ...base, maxBeams: 3, maxLowOctave: 2 })
     expect(deep.systemHeight).toBeGreaterThan(shallow.systemHeight)
-    expect(deep.lyricBaseline).toBeGreaterThan(shallow.lyricBaseline)
+    expect(deep.lyricBaselines[0]).toBeGreaterThan(shallow.lyricBaselines[0])
   })
 })
 
