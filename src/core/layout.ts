@@ -5,6 +5,7 @@
  */
 
 import { keyShifts, lookupFingering, type FingeringLookup } from './fingering/derive'
+import { XIAO, type InstrumentDef } from './fingering/instruments'
 import type { Measure, NoteEvent, Score } from './types'
 
 export const M = {
@@ -161,6 +162,8 @@ export interface Layout {
   verseCount: number
   /** 这份布局不画洞洞谱（播放窗用：上下都是洞洞谱就重复了） */
   omitFingering: boolean
+  /** 洞洞谱画的是哪支管子（孔数、分段都跟着它） */
+  instrument: InstrumentDef
   keySignature: string | null
   bands: Bands
   metrics: typeof M
@@ -172,6 +175,8 @@ export interface LayoutOptions {
    * 这样折行位置和打印出来的谱完全一致，只是竖着矮了一大截。
    */
   omitFingering?: boolean
+  /** 查哪支管子的指法表，默认箫 */
+  instrument?: InstrumentDef
 }
 
 interface ContentExtent {
@@ -208,7 +213,12 @@ function measureExtent(score: Score): ContentExtent {
   return { maxBeams, maxLowOctave, maxHighOctave, hasTempo, hasFermata, verseCount }
 }
 
-export function computeBands(ext: ContentExtent, omitFingering = false): Bands {
+/** 洞洞谱一列的总高：唱名格 + 各孔格 + 段与段之间的缝 */
+export function fingerColumnHeight(labelH: number, instrument: InstrumentDef): number {
+  return labelH + M.fingerCellH * instrument.holeNames.length + M.fingerSepH * (instrument.segments.length - 1)
+}
+
+export function computeBands(ext: ContentExtent, omitFingering = false, instrument: InstrumentDef = XIAO): Bands {
   // 数字上方：高音点占的高度
   const highDotSpace =
     ext.maxHighOctave > 0 ? 3 + (ext.maxHighOctave - 1) * M.octaveDotStep + 2 * M.octaveDotR : 0
@@ -251,7 +261,7 @@ export function computeBands(ext: ContentExtent, omitFingering = false): Bands {
 
   // 指法列顶部的唱名格：高音点画在数字上方，点越多这一格越高
   const fingerLabelH = omitFingering ? 0 : M.fingerLabelHBase + ext.maxHighOctave * M.octaveLabelStep
-  const fingerH = omitFingering ? 0 : fingerLabelH + M.fingerCellH * 8 + M.fingerSepH * 2
+  const fingerH = omitFingering ? 0 : fingerColumnHeight(fingerLabelH, instrument)
   const systemHeight = omitFingering
     ? (lyricBaselines.length > 0 ? lyricsBottom + 6 : digitsBottom) + M.systemPadBottom
     : fingeringTop + fingerH + M.systemPadBottom
@@ -273,7 +283,8 @@ export function computeBands(ext: ContentExtent, omitFingering = false): Bands {
 export function layout(score: Score, keySignature: string | null, opts: LayoutOptions = {}): Layout {
   const verseCount = score.verseCount
   const omitFingering = !!opts.omitFingering
-  const bands = computeBands(measureExtent(score), omitFingering)
+  const instrument = opts.instrument ?? XIAO
+  const bands = computeBands(measureExtent(score), omitFingering, instrument)
   const contentW = M.pageW - M.marginX * 2
 
   // ---- 1. 逐音算宽 ----
@@ -283,7 +294,7 @@ export function layout(score: Score, keySignature: string | null, opts: LayoutOp
     const notes: LaidNote[] = measure.notes.map((ev) => {
       const fingering =
         ev.type === 'note'
-          ? lookupFingering(ev, score.header.筒音作, score.header.筒音作Accidental, shifts[mi])
+          ? lookupFingering(ev, score.header.筒音作, score.header.筒音作Accidental, shifts[mi], instrument)
           : null
       const showFingering = !!fingering && !fingering.outOfRange && !ev.tiedFromPrev
       return { ev, x: 0, width: noteWidth(ev, showFingering), fingering, showFingering }
@@ -370,7 +381,7 @@ export function layout(score: Score, keySignature: string | null, opts: LayoutOp
   }
   if (cur.length > 0) pages.push({ systems: cur })
 
-  return { pages, verseCount, omitFingering, keySignature, bands, metrics: M }
+  return { pages, verseCount, omitFingering, instrument, keySignature, bands, metrics: M }
 }
 
 /** 小节未对齐时的自然宽度：各音宽 + 梁分组间隙 + 小节间隙（+ 变拍号的字位） */

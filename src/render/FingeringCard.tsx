@@ -7,6 +7,7 @@
 
 import { memo, useId } from 'react'
 
+import type { InstrumentDef } from '../core/fingering/instruments'
 import type { AmbiguousPolicy } from '../core/fingering/table'
 import { M } from '../core/layout'
 import type { PlayStep } from '../core/playback'
@@ -16,11 +17,13 @@ import { FingeringColumn, FingeringDefs, columnHeight, makeDefsIds } from './Fin
 const PAD = 7
 
 /** 卡片的宽高比，外层按宽度给尺寸时用得上 */
-export function cardViewBox(octave: number) {
+export function cardViewBox(octave: number, instrument: InstrumentDef) {
   const labelH = M.fingerLabelHBase + Math.max(0, octave) * M.octaveLabelStep
-  const h = columnHeight(labelH) + PAD * 2
-  const w = M.fingerW + M.edgeHoleShift + PAD * 2
-  return { labelH, w, h, x: -(M.fingerW / 2 + M.edgeHoleShift + PAD), y: -PAD }
+  const h = columnHeight(labelH, instrument) + PAD * 2
+  // 有左移孔的管子（箫）左边多留出错开的那一截
+  const shift = instrument.edgeHoles.size > 0 ? M.edgeHoleShift : 0
+  const w = M.fingerW + shift + PAD * 2
+  return { labelH, w, h, x: -(M.fingerW / 2 + shift + PAD), y: -PAD }
 }
 
 /**
@@ -30,12 +33,14 @@ export function cardViewBox(octave: number) {
 export const FingeringCard = memo(function FingeringCard({
   step,
   policy,
+  instrument,
 }: {
   step: PlayStep
   policy: AmbiguousPolicy
+  instrument: InstrumentDef
 }) {
   const ids = makeDefsIds(useId())
-  const vb = cardViewBox(step.ev.octave)
+  const vb = cardViewBox(step.ev.octave, instrument)
 
   return (
     <svg
@@ -55,6 +60,7 @@ export const FingeringCard = memo(function FingeringCard({
           octave={step.ev.octave}
           policy={policy}
           ids={ids}
+          instrument={instrument}
         />
       ) : (
         <Placeholder step={step} height={vb.h - PAD * 2} />

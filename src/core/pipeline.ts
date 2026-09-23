@@ -21,8 +21,8 @@ export function compile(src: string, opts: LayoutOptions = {}): CompileResult {
   const { score, issues } = parse(src)
   if (!score) return { score: null, layout: null, issues, warnMeasures: new Set() }
 
-  // 纯简谱不画指法，校验时也别拿箫的音域和调号去卡它
-  const semantic = validate(score, { forXiao: !opts.omitFingering })
+  // 纯简谱不画指法，校验时也别拿管子的音域和调号去卡它
+  const semantic = validate(score, { instrument: opts.omitFingering ? null : opts.instrument })
   const all = [...issues, ...semantic]
 
   const keySignature = startKeyOf(score.header)

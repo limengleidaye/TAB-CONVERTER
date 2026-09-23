@@ -5,7 +5,7 @@
  * 这样解析器只认一种输入格式，不必为表单单开一条路径。
  */
 
-import { HEADER_KEYS, splitSections } from './parser'
+import { HEADER_ALIASES, HEADER_KEYS, splitSections } from './parser'
 
 export type HeaderKey = (typeof HEADER_KEYS)[number]
 export type HeaderFields = Record<HeaderKey, string>
@@ -33,19 +33,22 @@ export function splitDsl(src: string): { fields: HeaderFields; body: string } {
     if (!t || t.startsWith('//')) continue
     const m = /^([^:：]+)[:：]\s*(.*)$/.exec(t)
     if (!m) continue
-    const key = m[1].trim() as HeaderKey
+    const key = (HEADER_ALIASES[m[1].trim()] ?? m[1].trim()) as HeaderKey
     if ((HEADER_KEYS as readonly string[]).includes(key)) fields[key] = m[2].trim()
   }
 
   return { fields, body: bodyText }
 }
 
-/** 把「谱头字段」+「正文」拼回完整 DSL；空字段不输出 */
-export function buildDsl(fields: HeaderFields, body: string): string {
+/**
+ * 把「谱头字段」+「正文」拼回完整 DSL；空字段不输出。
+ * keyLabel：「箫调」这一项落到文本里叫什么——笛谱写成「笛调」，读回来仍是同一个字段。
+ */
+export function buildDsl(fields: HeaderFields, body: string, keyLabel: '箫调' | '笛调' = '箫调'): string {
   const lines: string[] = []
   for (const key of HEADER_KEYS) {
     const value = fields[key]?.trim()
-    if (value) lines.push(`${key}: ${value}`)
+    if (value) lines.push(`${key === '箫调' ? keyLabel : key}: ${value}`)
   }
   return `${lines.join('\n')}\n\n${body}`
 }

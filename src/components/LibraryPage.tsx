@@ -15,6 +15,8 @@ import { CATALOG, searchCatalog, type CatalogEntry } from '../samples/catalog'
 import {
   BLANK_DSL,
   createRecord,
+  guessMode,
+  keyLabelOf,
   deleteScore,
   listScores,
   parseBundle,
@@ -25,6 +27,7 @@ import {
   serializeBundle,
   sortByUpdated,
   titleOf,
+  MODE_LABEL,
   type ScoreMode,
   type ScoreRecord,
 } from '../store/library'
@@ -73,7 +76,7 @@ export function LibraryPage({ onOpenTutorial, onOpen }: LibraryPageProps) {
       try {
         const parts = splitDsl(rec.dsl)
         parts.fields.标题 = `${parts.fields.标题 || '未命名'} 副本`
-        const copy = createRecord(buildDsl(parts.fields, parts.body), rec.mode)
+        const copy = createRecord(buildDsl(parts.fields, parts.body, keyLabelOf(rec.mode)), rec.mode)
         await putScore(copy)
         reload()
       } catch (e) {
@@ -141,7 +144,7 @@ export function LibraryPage({ onOpenTutorial, onOpen }: LibraryPageProps) {
           if (/\.json$/i.test(file.name)) {
             incoming.push(...resolveCollisions(parseBundle(text), existing))
           } else {
-            incoming.push(createRecord(text))
+            incoming.push(createRecord(text, guessMode(text)))
           }
         } catch (e) {
           failed.push(`${file.name}：${e instanceof Error ? e.message : String(e)}`)
@@ -206,7 +209,7 @@ export function LibraryPage({ onOpenTutorial, onOpen }: LibraryPageProps) {
                   <button className="score-open" onClick={() => onOpen(rec.id)}>
                     <span className="score-title">{rec.title}</span>
                     <span className={`badge ${rec.mode}`}>
-                      {rec.mode === 'jianpu' ? '纯简谱' : '洞洞谱'}
+                      {MODE_LABEL[rec.mode] ?? MODE_LABEL.xiao}
                     </span>
                     <span className="score-time">{fmtDate(rec.updatedAt)}</span>
                   </button>

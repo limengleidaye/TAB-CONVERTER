@@ -6,7 +6,7 @@
  */
 
 import type { Accidental, Header, NoteEvent, Score } from '../types'
-import { FINGERING_TABLE, TABLE_LENGTH } from './table'
+import { XIAO, type InstrumentDef } from './instruments'
 
 /** 唱名 1–7 相对本调 do 的半音偏移（大调音阶） */
 export const DEGREE_SEMITONE = [0, 0, 2, 4, 5, 7, 9, 11] as const
@@ -29,28 +29,30 @@ export function tongyinSemitone(筒音作: number, acc?: Accidental): number {
 
 export interface FingeringLookup {
   index: number
-  /** 长度 8，下标 0 = 第八孔（最上格）；越界时为 null */
+  /** 各孔状态，下标 0 = 最上一孔（箫第八孔 / 笛第六孔）；越界时为 null */
   holes: Uint8Array | null
-  /** 超出音域（index < 0 或 ≥ 32） */
+  /** 超出音域（index < 0 或 ≥ 表长） */
   outOfRange: boolean
 }
 
 /**
  * @param keyShift 曲中转调后，本调 do 相对起始调 do 高了几个半音（见 keyShifts）。
  *   箫还是那支箫，筒音作X 是按起始调定的；转调后的唱名先折回起始调再查表。
+ * @param instrument 查哪张表；箫、笛的索引口径一样，都是距筒音的半音数。
  */
 export function lookupFingering(
   note: Pick<NoteEvent, 'degree' | 'octave' | 'accidental'>,
   筒音作: number,
   筒音作Acc?: Accidental,
   keyShift = 0,
+  instrument: InstrumentDef = XIAO,
 ): FingeringLookup {
   const index =
     semitoneOf(note.degree, note.octave, note.accidental) + keyShift - tongyinSemitone(筒音作, 筒音作Acc)
-  if (index < 0 || index >= TABLE_LENGTH) {
+  if (index < 0 || index >= instrument.tableLength) {
     return { index, holes: null, outOfRange: true }
   }
-  return { index, holes: FINGERING_TABLE[index], outOfRange: false }
+  return { index, holes: instrument.table[index], outOfRange: false }
 }
 
 /* ---------- 调号推导（§6.5） ---------- */

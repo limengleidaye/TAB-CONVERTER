@@ -9,19 +9,20 @@ import {
   lookupFingering,
   startKeyOf,
 } from './fingering/derive'
+import { XIAO, type InstrumentDef } from './fingering/instruments'
 import type { Issue, Score } from './types'
 
 export interface ValidateOptions {
   /**
-   * 这份谱是不是给箫看的（要画洞洞谱）。
+   * 这份谱给哪支管子看（要画洞洞谱），默认箫；null = 纯简谱。
    * 纯简谱模式下 箫调 / 筒音作 只剩「推导调号」这一个用处，
-   * 音域、调号一致性都不该再拿箫来卡——谱面上根本没有箫。
+   * 音域、调号一致性都不该再拿管子来卡——谱面上根本没有管子。
    */
-  forXiao?: boolean
+  instrument?: InstrumentDef | null
 }
 
 export function validate(score: Score, opts: ValidateOptions = {}): Issue[] {
-  const forXiao = opts.forXiao ?? true
+  const instrument = opts.instrument === undefined ? XIAO : opts.instrument
   const issues: Issue[] = []
   const { 筒音作, 筒音作Accidental, 箫调, 调号 } = score.header
 
@@ -72,8 +73,8 @@ export function validate(score: Score, opts: ValidateOptions = {}): Issue[] {
     })
   })
 
-  // 下面全是箫的事：纯简谱到此为止
-  if (!forXiao) {
+  // 下面全是管子的事：纯简谱到此为止
+  if (!instrument) {
     // 调号没写时才回落到 箫调 + 筒音作 去推，这时候箫调认不出来就真的没调号可显示了
     if (!score.header.调号 && !deriveKeySignature(箫调, 筒音作, 筒音作Accidental)) {
       issues.push({
@@ -89,11 +90,11 @@ export function validate(score: Score, opts: ValidateOptions = {}): Issue[] {
   score.measures.forEach((m, mi) => {
     for (const n of m.notes) {
       if (n.type !== 'note') continue
-      const hit = lookupFingering(n, 筒音作, 筒音作Accidental, shifts[mi])
+      const hit = lookupFingering(n, 筒音作, 筒音作Accidental, shifts[mi], instrument)
       if (hit.outOfRange) {
         issues.push({
           severity: 'warning',
-          message: `第 ${m.index} 小节：音超出八孔箫音域（距筒音 ${hit.index} 个半音，表长 32），洞洞谱留空`,
+          message: `第 ${m.index} 小节：音超出${instrument.fullName}音域（距筒音 ${hit.index} 个半音，表长 ${instrument.tableLength}），洞洞谱留空`,
           span: n.span,
           measureIndex: m.index,
         })
@@ -102,16 +103,17 @@ export function validate(score: Score, opts: ValidateOptions = {}): Issue[] {
   })
 
   // 调号与 箫调 + 筒音作 的一致性
+  const keyLabel = `${instrument.short}调`
   const derived = deriveKeySignature(箫调, 筒音作, 筒音作Accidental)
   if (!derived) {
-    issues.push({ severity: 'warning', message: `无法识别的「箫调:${箫调}」，调号将不显示` })
+    issues.push({ severity: 'warning', message: `无法识别的「${keyLabel}:${箫调}」，调号将不显示` })
   } else if (调号) {
     // 按音高比，不按字面比：1=♯C 与 1=♭D 是同一个调
     const written = keySignaturePitchClass(调号.replace(/\s/g, ''))
     if (written !== keySignaturePitchClass(derived)) {
       issues.push({
         severity: 'warning',
-        message: `「调号:${调号}」与 箫调${箫调} + 筒音作${筒音作} 推导出的 ${derived} 不一致`,
+        message: `「调号:${调号}」与 ${keyLabel}${箫调} + 筒音作${筒音作} 推导出的 ${derived} 不一致`,
       })
     }
   }

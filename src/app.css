@@ -935,6 +935,12 @@ button.primary:hover:not(:disabled) {
   background: #fff8ee;
 }
 
+.badge.dizi {
+  border-color: #6fae7c;
+  color: #2f7a41;
+  background: #f0f8f1;
+}
+
 .badge.jianpu {
   border-color: #c9c9c4;
   color: #777;

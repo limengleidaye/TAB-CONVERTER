@@ -1,7 +1,5 @@
 import type { HeaderFields, HeaderKey } from '../core/dsl'
-
-/** 常见箫调（筒音作5 时的调） */
-const XIAO_KEYS = ['G', 'F', 'D', 'C', 'A', 'bB', 'bE']
+import type { InstrumentDef } from '../core/fingering/instruments'
 
 /** 筒音唱名；指法表里收录到 ♭7 */
 const TONE_OPTIONS = ['1', '2', '3', '4', '5', '6', 'b7', '7']
@@ -11,13 +9,19 @@ const METERS = ['4/4', '3/4', '2/4', '2/2', '6/8', '3/8']
 export interface HeaderFormProps {
   fields: HeaderFields
   onChange: (key: HeaderKey, value: string) => void
-  /** 由 箫调 + 筒音作 推导出的调号，作为「调号」留空时的占位提示 */
+  /** 由 箫调(笛调) + 筒音作 推导出的调号，作为「调号」留空时的占位提示 */
   derivedKey: string | null
-  /** 简谱模式下箫调/筒音作只影响不再显示的洞洞谱，收起来，调号改为直接填 */
-  jianpu?: boolean
+  /**
+   * 画哪支管子的洞洞谱。null = 纯简谱：箫调/筒音作只影响不再显示的洞洞谱，
+   * 收起来，调号改为直接填。
+   */
+  instrument: InstrumentDef | null
 }
 
-export function HeaderForm({ fields, onChange, derivedKey, jianpu = false }: HeaderFormProps) {
+export function HeaderForm({ fields, onChange, derivedKey, instrument }: HeaderFormProps) {
+  const jianpu = !instrument
+  // 管子的调：列出这种管子常见的几个，谱里写了别的也照样留着
+  const keys = instrument?.commonKeys ?? []
   const set = (key: HeaderKey) => (e: { target: { value: string } }) => onChange(key, e.target.value)
 
   return (
@@ -29,7 +33,11 @@ export function HeaderForm({ fields, onChange, derivedKey, jianpu = false }: Hea
 
       <label className="wide">
         <span>副标题</span>
-        <input value={fields.副标题} onChange={set('副标题')} placeholder="如：箫筒音作2" />
+        <input
+          value={fields.副标题}
+          onChange={set('副标题')}
+          placeholder={`如：${instrument?.short ?? '箫'}筒音作2`}
+        />
       </label>
 
       <label className="wide">
@@ -39,13 +47,14 @@ export function HeaderForm({ fields, onChange, derivedKey, jianpu = false }: Hea
 
       {jianpu ? null : (
       <label>
-        <span>箫调</span>
+        <span>{instrument.short}调</span>
         <select value={fields.箫调} onChange={set('箫调')}>
-          {XIAO_KEYS.map((k) => (
+          {keys.map((k) => (
             <option key={k} value={k}>
               {k}调
             </option>
           ))}
+          {!fields.箫调 || keys.includes(fields.箫调) ? null : <option value={fields.箫调}>{fields.箫调}调</option>}
         </select>
       </label>
       )}

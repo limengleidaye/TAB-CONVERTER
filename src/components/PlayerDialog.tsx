@@ -151,8 +151,8 @@ function PlayerWindow({
   ambiguousPolicy: AmbiguousPolicy
   onClose: () => void
 }) {
-  const showStrip = mode === 'xiao'
-  const instrument = mode === 'xiao' ? 'xiao' : 'piano'
+  const showStrip = mode !== 'jianpu'
+  const instrument = mode === 'jianpu' ? 'piano' : mode
   const [bpm, setBpm] = useState(() =>
     score.header.速度 && score.header.速度 > 0 ? score.header.速度 : DEFAULT_BPM,
   )
@@ -171,8 +171,8 @@ function PlayerWindow({
    * 而且占掉的竖向空间正是一屏能看几行的关键。折行位置与打印谱保持一致。
    */
   const playLayout = useMemo(
-    () => buildLayout(score, layout.keySignature, { omitFingering: true }),
-    [score, layout.keySignature],
+    () => buildLayout(score, layout.keySignature, { omitFingering: true, instrument: layout.instrument }),
+    [score, layout.keySignature, layout.instrument],
   )
 
   const timeline = useMemo(
@@ -406,7 +406,7 @@ function PlayerWindow({
 
   // 卡片高度取条子高度的固定比例，宽度由洞洞谱一列自身的长宽比反推
   const cardH = Math.max(80, strip.h * CARD_H_RATIO)
-  const shape = cardViewBox(current?.ev.octave ?? 0)
+  const shape = cardViewBox(current?.ev.octave ?? 0, layout.instrument)
   const cardW = (cardH * shape.w) / shape.h
   const pitch = cardW * CARD_GAP_RATIO
   const half = Math.min(MAX_HALF, Math.ceil(strip.w / 2 / pitch) + 1)
@@ -462,7 +462,7 @@ function PlayerWindow({
                 zIndex: near > 0.5 ? 10 : 5,
               }}
             >
-              <FingeringCard step={step} policy={ambiguousPolicy} />
+              <FingeringCard step={step} policy={ambiguousPolicy} instrument={layout.instrument} />
             </div>
           )
         })}
@@ -526,7 +526,7 @@ function PlayerWindow({
 
         <label>
           <input type="checkbox" checked={sound} onChange={(e) => setSound(e.target.checked)} />
-          {mode === 'xiao' ? '箫声' : '钢琴'}
+          {mode === 'jianpu' ? '钢琴' : `${layout.instrument.short}声`}
         </label>
         <label>
           <input type="checkbox" checked={metro} onChange={(e) => setMetro(e.target.checked)} />

@@ -58,21 +58,29 @@ const ROWS_ENCODED: readonly string[] = [
  * table[index] = Uint8Array(8)；
  * 下标 0 = 第八孔（洞洞谱最上格），7 = 第一孔（最下格）。
  */
-export const FINGERING_TABLE: readonly Uint8Array[] = buildTable()
+export const FINGERING_TABLE: readonly Uint8Array[] = buildTable(ROWS_ENCODED, HOLE_ORDER, TABLE_LENGTH)
 
-function buildTable(): Uint8Array[] {
-  if (ROWS_ENCODED.length !== HOLE_COUNT) {
-    throw new Error(`指法表应有 ${HOLE_COUNT} 行，实际 ${ROWS_ENCODED.length} 行`)
+/**
+ * 把「每孔一行」的编码串转置成 table[音位][孔]。
+ * 箫、笛共用；行数、每行长度不对就直接抛，转录错了宁可起不来也别画错谱。
+ */
+export function buildTable(
+  rows: readonly string[],
+  holeNames: readonly string[],
+  length: number,
+): Uint8Array[] {
+  if (rows.length !== holeNames.length) {
+    throw new Error(`指法表应有 ${holeNames.length} 行，实际 ${rows.length} 行`)
   }
-  ROWS_ENCODED.forEach((row, i) => {
-    if (row.length !== TABLE_LENGTH) {
-      throw new Error(`指法表「${HOLE_ORDER[i]}」应有 ${TABLE_LENGTH} 个音位，实际 ${row.length} 个`)
+  rows.forEach((row, i) => {
+    if (row.length !== length) {
+      throw new Error(`指法表「${holeNames[i]}」应有 ${length} 个音位，实际 ${row.length} 个`)
     }
   })
-  return Array.from({ length: TABLE_LENGTH }, (_, col) => {
-    const holes = new Uint8Array(HOLE_COUNT)
-    for (let row = 0; row < HOLE_COUNT; row++) {
-      holes[row] = ROWS_ENCODED[row].charCodeAt(col) - 48
+  return Array.from({ length }, (_, col) => {
+    const holes = new Uint8Array(rows.length)
+    for (let row = 0; row < rows.length; row++) {
+      holes[row] = rows[row].charCodeAt(col) - 48
     }
     return holes
   })

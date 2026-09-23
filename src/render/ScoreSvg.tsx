@@ -6,9 +6,11 @@
  */
 
 import { Fragment, createContext, useContext, useId } from 'react'
+import { XIAO, type InstrumentDef } from '../core/fingering/instruments'
 import { type AmbiguousPolicy } from '../core/fingering/table'
 import {
   M,
+  fingerColumnHeight,
   type ArcSeg,
   type BeamSeg,
   type Bands,
@@ -39,7 +41,7 @@ const FALLBACK_BANDS: Bands = {
   lyricBaselines: [],
   fingeringTop: 72,
   fingerLabelH: M.fingerLabelHBase,
-  fingerH: M.fingerLabelHBase + M.fingerCellH * 8 + M.fingerSepH * 2,
+  fingerH: fingerColumnHeight(M.fingerLabelHBase, XIAO),
   systemHeight: 250,
 }
 
@@ -49,6 +51,9 @@ const useBands = () => useContext(BandsContext)
 /** 指法列的 defs id（每张 svg 一套，见 FingeringColumn）靠 context 传到深处 */
 const DefsContext = createContext<FingeringDefsIds>(makeDefsIds('fallback'))
 const useDefsIds = () => useContext(DefsContext)
+
+/** 洞洞谱画哪支管子，同样从 layout 顶上一路传下去 */
+const InstrumentContext = createContext<InstrumentDef>(XIAO)
 
 /**
  * 片段模式：教程里的小例子用。去掉谱头/页脚/水印，viewBox 裁到第一行谱，
@@ -90,6 +95,7 @@ export function ScoreSvg({
   return (
     <BandsContext.Provider value={layout.bands}>
      <DefsContext.Provider value={ids}>
+     <InstrumentContext.Provider value={layout.instrument}>
       <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
@@ -121,6 +127,7 @@ export function ScoreSvg({
           <Footer title={score.header.标题} pageIndex={pageIndex} pageCount={layout.pages.length} />
         )}
       </svg>
+     </InstrumentContext.Provider>
      </DefsContext.Provider>
     </BandsContext.Provider>
   )
@@ -310,6 +317,7 @@ function MeasureView({
 }) {
   const bands = useBands()
   const ids = useDefsIds()
+  const instrument = useContext(InstrumentContext)
   const m = lm.measure
   const markY = Math.max(bands.arcY - 10, 10)
 
@@ -449,6 +457,7 @@ function MeasureView({
               octave={ln.ev.octave}
               policy={ambiguousPolicy}
               ids={ids}
+              instrument={instrument}
             />
           ) : null}
         </Fragment>

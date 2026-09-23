@@ -22,6 +22,12 @@ import type {
 /** 头部字段顺序即渲染/序列化顺序 */
 export const HEADER_KEYS = ['标题', '副标题', '制谱', '箫调', '筒音作', '调号', '拍号', '速度'] as const
 
+/**
+ * 头部字段的别名 → 规范名。笛谱写「笛调:」，与「箫调:」是同一个字段：
+ * 两种管子的调名约定一样（筒音作 5 时 1=X），解析后都落在 header.箫调。
+ */
+export const HEADER_ALIASES: Readonly<Record<string, (typeof HEADER_KEYS)[number]>> = { 笛调: '箫调' }
+
 export function parse(src: string): ParseResult {
   const issues: Issue[] = []
   const { headerText, bodyText, bodyOffset } = splitSections(src)
@@ -85,7 +91,7 @@ function parseHeader(text: string, issues: Issue[]): Header | null {
       issues.push({ severity: 'error', message: `头部无法解析：${t}` })
       continue
     }
-    const key = m[1].trim()
+    const key = HEADER_ALIASES[m[1].trim()] ?? m[1].trim()
     if (!(HEADER_KEYS as readonly string[]).includes(key)) {
       issues.push({ severity: 'warning', message: `未知头部字段「${key}」，已忽略` })
       continue
@@ -95,7 +101,8 @@ function parseHeader(text: string, issues: Issue[]): Header | null {
 
   for (const required of ['标题', '箫调', '筒音作', '拍号']) {
     if (!raw[required]) {
-      issues.push({ severity: 'error', message: `缺少必填头部字段「${required}:」` })
+      const hint = required === '箫调' ? '（笛谱写「笛调:」）' : ''
+      issues.push({ severity: 'error', message: `缺少必填头部字段「${required}:」${hint}` })
     }
   }
   if (!raw['标题'] || !raw['箫调'] || !raw['筒音作'] || !raw['拍号']) return null

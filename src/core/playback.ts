@@ -90,11 +90,12 @@ export interface Timeline {
 }
 
 /**
- * 播放的两种口径：
- * - `xiao`：音高按箫来——距筒音多少个半音，筒音音名由箫调定（G 调箫筒音 = D4）；
+ * 播放的口径：
+ * - `xiao` / `dizi`：音高按管子来——距筒音多少个半音，筒音音名由箫调/笛调定，
+ *   八度由乐器定（G 调箫筒音 = D4，D 调笛筒音 = A4），管子取 layout.instrument；
  * - `jianpu`：音高只看调号，中音 1 落在 C4~B4，与乐器无关。
  */
-export type PlayMode = 'xiao' | 'jianpu'
+export type PlayMode = 'xiao' | 'dizi' | 'jianpu'
 
 export interface TimelineOptions {
   /** 默认按箫 */
@@ -166,7 +167,10 @@ export function buildTimeline(score: Score, layout: Layout, opts: TimelineOption
   const bpms = resolveTempo(groups, baseBpm, rampAmount)
 
   // ---- 4. 时间、方框、音高 ----
+  // 筒音的绝对音高：音名由箫调/笛调定，八度落在乐器自己的那一段里
   const tongyinPc = tongyinPitchClass(score.header.箫调)
+  const floor = layout.instrument.tongyinFloorMidi
+  const tongyinMidi = tongyinPc === null ? null : floor + ((tongyinPc - (floor % 12) + 12) % 12)
   // 简谱模式下箫调/筒音作与音高无关，主音直接从调号取
   const tonicPc = opts.mode === 'jianpu' ? keySignaturePitchClass(layout.keySignature) : null
   // 曲中转调：简谱口径下主音跟着挪（箫的口径不用管，指法查表时已经折算过）
@@ -194,7 +198,7 @@ export function buildTimeline(score: Score, layout: Layout, opts: TimelineOption
       freq: frequencyOf(
         head.ln.fingering,
         ev,
-        tongyinPc,
+        tongyinMidi,
         tonicPc === null ? null : tonicPc + (shiftOf.get(head.measureIndex) ?? 0),
       ),
       fingering: head.ln.fingering,
@@ -415,14 +419,15 @@ function boxOf(g: FlatNote[], bands: Bands): PlayBox {
 /**
  * 绝对音高。
  *
- * 箫：`lookupFingering` 给的 index 就是「距筒音的半音数」，筒音音名由箫调决定
- * （G 调箫筒音 = D，F 调箫筒音 = C），取中央 C 往上那个八度——G 调箫筒音 = D4。
+ * 箫 / 笛：`lookupFingering` 给的 index 就是「距筒音的半音数」，筒音音名由调决定
+ * （G 调箫筒音 = D，D 调笛筒音 = A），八度由乐器的 tongyinFloorMidi 定——
+ * 箫取中央 C 往上那个八度（G 调箫筒音 = D4），笛高一截（D 调笛筒音 = A4）。
  * 简谱：与乐器无关，中音 1 就落在 C4~B4 这个八度里，其余音按调式半音数推。
  */
 function frequencyOf(
   fingering: FingeringLookup | null,
   ev: NoteEvent,
-  tongyinPc: number | null,
+  tongyinMidi: number | null,
   tonicPc: number | null,
 ): number | null {
   if (ev.type !== 'note') return null
@@ -430,8 +435,8 @@ function frequencyOf(
   const midi =
     tonicPc !== null
       ? 60 + tonicPc + semitoneOf(ev.degree, ev.octave, ev.accidental)
-      : fingering && tongyinPc !== null
-        ? 60 + tongyinPc + fingering.index
+      : fingering && tongyinMidi !== null
+        ? tongyinMidi + fingering.index
         : null
 
   if (midi === null || midi < 36 || midi > 108) return null

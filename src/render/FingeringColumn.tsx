@@ -1,5 +1,5 @@
 /**
- * 洞洞谱的「一列」：管身 + 八个孔 + 顶部唱名。
+ * 洞洞谱的「一列」：管身 + 各孔（箫八个、笛六个）+ 顶部唱名。
  *
  * 打印谱（ScoreSvg）与播放窗里放大的滑动卡片共用这一份几何——
  * 分段方式、两端孔的左移、孔距若各写一份，迟早会走样成两种谱。
@@ -7,31 +7,24 @@
 
 import { Fragment } from 'react'
 
+import type { InstrumentDef } from '../core/fingering/instruments'
 import { HOLE, resolveHole, type AmbiguousPolicy } from '../core/fingering/table'
-import { M } from '../core/layout'
+import { M, fingerColumnHeight } from '../core/layout'
 import { COLORS, DIGIT_FONT } from './colors'
 import { PANDA_HOLE_PNG } from './panda'
 
-/** 分段：[标签 + 第八~第五孔] / [第四~第二孔] / [第一孔]（与原图一致） */
-export const FINGER_SEGMENTS: readonly (readonly number[])[] = [
-  [0, 1, 2, 3],
-  [4, 5, 6],
-  [7],
-]
-
 /**
- * 第八孔（最上）与第一孔（最下）在原图里是向左错开画的，用来标出这两个孔的特殊；
- * 中间六个孔居中。holeIdx 0 = 第八孔，7 = 第一孔。
+ * 分段与左移孔都由乐器定（instruments.ts）：
+ * 箫是 [标签 + 第八~第五孔] / [第四~第二孔] / [第一孔]，第八孔与第一孔向左错开（与原图一致）；
+ * 笛是左手三孔 / 右手三孔，不错开。
  */
-export const EDGE_HOLES = new Set([0, 7])
-
-export function holeCenterX(x: number, holeIdx: number): number {
-  return EDGE_HOLES.has(holeIdx) ? x - M.edgeHoleShift : x
+export function holeCenterX(x: number, holeIdx: number, instrument: InstrumentDef): number {
+  return instrument.edgeHoles.has(holeIdx) ? x - M.edgeHoleShift : x
 }
 
-/** 一列的总高：唱名格 + 八个孔格 + 两条分段缝 */
-export function columnHeight(labelH: number): number {
-  return labelH + M.fingerCellH * 8 + M.fingerSepH * 2
+/** 一列的总高：唱名格 + 各孔格 + 分段缝 */
+export function columnHeight(labelH: number, instrument: InstrumentDef): number {
+  return fingerColumnHeight(labelH, instrument)
 }
 
 /**
@@ -88,6 +81,7 @@ export interface FingeringColumnProps {
   octave: number
   policy: AmbiguousPolicy
   ids: FingeringDefsIds
+  instrument: InstrumentDef
 }
 
 export function FingeringColumn({
@@ -99,12 +93,13 @@ export function FingeringColumn({
   octave,
   policy,
   ids,
+  instrument,
 }: FingeringColumnProps) {
   const left = x - M.fingerW / 2
   const parts: JSX.Element[] = []
   let y = top
 
-  FINGER_SEGMENTS.forEach((seg, si) => {
+  instrument.segments.forEach((seg, si) => {
     const segLabelH = si === 0 ? labelH : 0
     const h = segLabelH + seg.length * M.fingerCellH
     parts.push(
@@ -154,7 +149,7 @@ export function FingeringColumn({
       parts.push(
         <HoleGlyph
           key={`h-${holeIdx}`}
-          cx={holeCenterX(x, holeIdx)}
+          cx={holeCenterX(x, holeIdx, instrument)}
           cy={cy}
           state={resolveHole(holes[holeIdx], policy)}
           ids={ids}

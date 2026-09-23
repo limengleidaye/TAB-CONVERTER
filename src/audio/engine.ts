@@ -7,27 +7,68 @@
  *   3. 始终带一层气声——一路带通白噪，中心跟着音高走。
  * 再加约 5Hz、延迟进入的轻微颤音，就有吹管的味道了。
  *
+ * 笛和箫同属吹管，走同一条合成路径，只换一组参数（VOICES）：笛是横吹、管细、贴着笛膜，
+ * 声音亮得多——高次谐波明显更强、起音更脆，笛膜振动再添一层偏高的「沙沙」声。
+ *
  * 钢琴是击弦，几乎处处相反：起音只有几毫秒、没有持续段（按住也一直在衰减）、
  * 谐波多且**高次衰减得更快**（所以音头亮、尾巴闷），弦的刚度还让泛音略高于整数倍。
  * 这里用「一排微微失谐的正弦 + 随时间关下来的低通 + 指数衰减包络 + 一记槌击噪声」逼近。
  */
 
-export type Instrument = 'xiao' | 'piano'
+export type Instrument = 'xiao' | 'dizi' | 'piano'
 
-/** 一次起吹的三条振荡器：基频 / 二次 / 三次谐波的相对音量 */
-const PARTIALS: readonly { ratio: number; gain: number }[] = [
-  { ratio: 1, gain: 1 },
-  { ratio: 2, gain: 0.13 },
-  { ratio: 3, gain: 0.045 },
-]
+/** 吹管类的一组音色参数 */
+interface WindVoice {
+  /** 一次起吹的几条振荡器：各次谐波的相对音量 */
+  partials: readonly { ratio: number; gain: number }[]
+  attack: number
+  release: number
+  /** 管体共鸣低通的截止：基频的几倍 */
+  brightness: number
+  breathGain: number
+  /** 气声带通的中心：基频的几倍 */
+  breathCenter: number
+  vibratoHz: number
+  /** 颤音深度（相对音高的比例）与进入延迟：一起音就抖会很假 */
+  vibratoDepth: number
+  vibratoDelay: number
+}
 
-const ATTACK = 0.055
-const RELEASE = 0.09
-const BREATH_GAIN = 0.05
-const VIBRATO_HZ = 4.8
-/** 颤音深度（相对音高的比例）与进入延迟：一起音就抖会很假 */
-const VIBRATO_DEPTH = 0.005
-const VIBRATO_DELAY = 0.22
+const VOICES: Record<'xiao' | 'dizi', WindVoice> = {
+  xiao: {
+    partials: [
+      { ratio: 1, gain: 1 },
+      { ratio: 2, gain: 0.13 },
+      { ratio: 3, gain: 0.045 },
+    ],
+    attack: 0.055,
+    release: 0.09,
+    brightness: 6,
+    breathGain: 0.05,
+    breathCenter: 2,
+    vibratoHz: 4.8,
+    vibratoDepth: 0.005,
+    vibratoDelay: 0.22,
+  },
+  dizi: {
+    partials: [
+      { ratio: 1, gain: 1 },
+      { ratio: 2, gain: 0.32 },
+      { ratio: 3, gain: 0.16 },
+      { ratio: 4, gain: 0.07 },
+      { ratio: 5, gain: 0.03 },
+    ],
+    attack: 0.03,
+    release: 0.07,
+    brightness: 10,
+    // 笛膜的沙声：比箫的气声更响、更靠上
+    breathGain: 0.07,
+    breathCenter: 4,
+    vibratoHz: 5.6,
+    vibratoDepth: 0.006,
+    vibratoDelay: 0.18,
+  },
+}
 
 const PIANO_ATTACK = 0.004
 /** 松开琴键后制音器落下的时间 */
@@ -74,7 +115,7 @@ export class PlaybackAudio {
   note(freq: number, at: number, duration: number, instrument: Instrument = 'xiao', volume = 0.5): void {
     if (this.isPast(at)) return
     if (instrument === 'piano') this.piano(freq, at, duration, volume)
-    else this.xiao(freq, at, duration, volume)
+    else this.wind(VOICES[instrument], freq, at, duration, volume)
   }
 
   /**
@@ -86,41 +127,41 @@ export class PlaybackAudio {
     return !!this.ctx && at < this.ctx.currentTime - 0.02
   }
 
-  private xiao(freq: number, at: number, duration: number, volume: number): void {
+  private wind(v: WindVoice, freq: number, at: number, duration: number, volume: number): void {
     const ctx = this.ctx
     if (!ctx || !this.master || duration <= 0) return
 
     const start = Math.max(at, ctx.currentTime)
     // 时值短于起音+收音时，把包络压扁，免得短音听不见头
-    const body = Math.max(duration, ATTACK + RELEASE + 0.02)
+    const body = Math.max(duration, v.attack + v.release + 0.02)
     const end = start + body
 
     const env = ctx.createGain()
     env.gain.setValueAtTime(0.0001, start)
-    env.gain.exponentialRampToValueAtTime(volume, start + Math.min(ATTACK, body * 0.4))
-    env.gain.setValueAtTime(volume, Math.max(start + ATTACK, end - RELEASE))
+    env.gain.exponentialRampToValueAtTime(volume, start + Math.min(v.attack, body * 0.4))
+    env.gain.setValueAtTime(volume, Math.max(start + v.attack, end - v.release))
     env.gain.exponentialRampToValueAtTime(0.0001, end)
 
     // 管体共鸣：把高次谐波压掉一截，声音才不刺
     const tone = ctx.createBiquadFilter()
     tone.type = 'lowpass'
-    tone.frequency.value = Math.min(9000, freq * 6)
+    tone.frequency.value = Math.min(9000, freq * v.brightness)
     tone.Q.value = 0.4
     tone.connect(env)
     env.connect(this.master)
 
-    // 颤音：一个 LFO 同时推三条振荡器的频率
+    // 颤音：一个 LFO 同时推各条振荡器的频率
     const lfo = ctx.createOscillator()
-    lfo.frequency.value = VIBRATO_HZ
+    lfo.frequency.value = v.vibratoHz
     const lfoGain = ctx.createGain()
     lfoGain.gain.setValueAtTime(0, start)
-    lfoGain.gain.setValueAtTime(0, start + Math.min(VIBRATO_DELAY, body * 0.5))
-    lfoGain.gain.linearRampToValueAtTime(freq * VIBRATO_DEPTH, end)
+    lfoGain.gain.setValueAtTime(0, start + Math.min(v.vibratoDelay, body * 0.5))
+    lfoGain.gain.linearRampToValueAtTime(freq * v.vibratoDepth, end)
     lfo.connect(lfoGain)
     lfo.start(start)
     lfo.stop(end + 0.02)
 
-    for (const p of PARTIALS) {
+    for (const p of v.partials) {
       const osc = ctx.createOscillator()
       osc.type = 'sine'
       osc.frequency.value = freq * p.ratio
@@ -141,11 +182,11 @@ export class PlaybackAudio {
     breath.loop = true
     const bp = ctx.createBiquadFilter()
     bp.type = 'bandpass'
-    bp.frequency.value = freq * 2
+    bp.frequency.value = freq * v.breathCenter
     bp.Q.value = 1.2
     const bg = ctx.createGain()
     bg.gain.setValueAtTime(0.0001, start)
-    bg.gain.exponentialRampToValueAtTime(volume * BREATH_GAIN, start + Math.min(0.03, body * 0.3))
+    bg.gain.exponentialRampToValueAtTime(volume * v.breathGain, start + Math.min(0.03, body * 0.3))
     bg.gain.exponentialRampToValueAtTime(0.0001, end)
     breath.connect(bp)
     bp.connect(bg)

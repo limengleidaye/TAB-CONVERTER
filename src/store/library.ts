@@ -10,13 +10,44 @@
  */
 
 import { splitDsl } from '../core/dsl'
+import { splitSections } from '../core/parser'
+import { INSTRUMENTS, type InstrumentDef } from '../core/fingering/instruments'
 
 const DB_NAME = 'zhupu'
 const DB_VERSION = 1
 const STORE = 'scores'
 
-/** 这首谱子给谁看：箫的洞洞谱，还是纯简谱 */
-export type ScoreMode = 'xiao' | 'jianpu'
+/** 这首谱子给谁看：箫谱、笛谱（都带洞洞谱），还是纯简谱 */
+export type ScoreMode = 'xiao' | 'dizi' | 'jianpu'
+
+export const MODE_LABEL: Readonly<Record<ScoreMode, string>> = {
+  xiao: '箫谱',
+  dizi: '笛谱',
+  jianpu: '纯简谱',
+}
+
+/** 这个模式要画哪支管子的洞洞谱；纯简谱为 null */
+export function instrumentOf(mode: ScoreMode): InstrumentDef | null {
+  return mode === 'jianpu' ? null : INSTRUMENTS[mode]
+}
+
+/** 谱头「箫调」这一项写成什么：笛谱写「笛调」 */
+export function keyLabelOf(mode: ScoreMode): '箫调' | '笛调' {
+  return mode === 'dizi' ? '笛调' : '箫调'
+}
+
+/**
+ * 单首 .txt 导入时没有模式信息，只能看谱头猜：写了「笛调:」就是笛谱，否则按箫谱。
+ * 纯简谱与箫谱的文本长得一样，分不出来，导进来后在编辑器里切一下即可。
+ */
+export function guessMode(dsl: string): ScoreMode {
+  return /^\s*笛调\s*[:：]/m.test(splitSections(dsl).headerText) ? 'dizi' : 'xiao'
+}
+
+/** 认不出的一律当箫谱：早先的记录只有 xiao / jianpu 两种 */
+export function normalizeMode(mode: unknown): ScoreMode {
+  return mode === 'jianpu' || mode === 'dizi' ? mode : 'xiao'
+}
 
 export interface ScoreRecord {
   id: string
@@ -101,7 +132,7 @@ export function parseBundle(text: string): ScoreRecord[] {
       id: typeof r.id === 'string' && r.id ? r.id : newId(),
       title: typeof r.title === 'string' && r.title.trim() ? r.title : titleOf(r.dsl),
       dsl: r.dsl,
-      mode: r.mode === 'jianpu' ? 'jianpu' : 'xiao',
+      mode: normalizeMode(r.mode),
       createdAt: typeof r.createdAt === 'number' ? r.createdAt : now,
       updatedAt: typeof r.updatedAt === 'number' ? r.updatedAt : now,
     })
