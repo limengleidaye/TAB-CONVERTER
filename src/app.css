@@ -849,6 +849,34 @@ button.primary:hover:not(:disabled) {
   margin: 24px 0 10px;
 }
 
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 24px 0 10px;
+}
+
+.section-head h2 {
+  margin: 0;
+}
+
+.catalog-search {
+  font: inherit;
+  font-size: 13px;
+  width: 220px;
+  max-width: 50%;
+  padding: 5px 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+}
+
+.catalog-search:focus {
+  outline: none;
+  border-color: #999;
+}
+
 .score-list {
   list-style: none;
   margin: 0;

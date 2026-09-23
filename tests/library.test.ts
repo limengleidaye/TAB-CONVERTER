@@ -19,6 +19,7 @@ import {
   titleOf,
 } from '../src/store/library'
 import { SAMPLES } from '../src/samples'
+import { CATALOG, searchCatalog } from '../src/samples/catalog'
 import { 落了白 } from '../src/samples/reference'
 
 describe('谱库：记录', () => {
@@ -149,14 +150,12 @@ describe('纯简谱模式', () => {
 })
 
 describe('示例曲目', () => {
-  it('一首讲写法、两首箫谱打头，其余是纯简谱', () => {
-    expect(SAMPLES.slice(0, 3).map((s) => s.name)).toEqual(['写法示范', '茉莉花', '送别'])
-    expect(SAMPLES.slice(0, 3).every((s) => s.mode === 'xiao')).toBe(true)
-    expect(SAMPLES.slice(3).every((s) => s.mode === 'jianpu')).toBe(true)
-    expect(new Set(SAMPLES.map((s) => s.name)).size).toBe(SAMPLES.length)
+  it('三首：一首讲写法，两首箫谱', () => {
+    expect(SAMPLES.map((s) => s.name)).toEqual(['写法示范', '茉莉花', '送别'])
+    expect(SAMPLES.every((s) => s.mode === 'xiao')).toBe(true)
   })
 
-  it.each(SAMPLES)('$name：0 错误 0 警告', ({ dsl, mode }) => {
+  it.each([...SAMPLES, ...CATALOG])('$name：0 错误 0 警告', ({ dsl, mode }) => {
     // 示例是用户打开的第一样东西，左下角不该一上来就是红黄字
     const r = compile(dsl, { omitFingering: mode === 'jianpu' })
     expect(r.issues).toEqual([])
@@ -183,6 +182,44 @@ describe('示例曲目', () => {
   })
 })
 
+describe('曲库', () => {
+  it('全是纯简谱，曲名不重复，也不和示例曲目撞名', () => {
+    expect(CATALOG.length).toBeGreaterThan(0)
+    expect(CATALOG.every((s) => s.mode === 'jianpu')).toBe(true)
+    const names = [...SAMPLES, ...CATALOG].map((s) => s.name)
+    expect(new Set(names).size).toBe(names.length)
+  })
+
+  it('曲名与谱头「标题」一致——搜的是列表上看到的名字，加进谱库后也叫这个', () => {
+    for (const s of CATALOG) expect(s.dsl, s.name).toMatch(new RegExp(`^标题: ${s.name}$`, 'm'))
+  })
+
+  it('没写关键字就全给', () => {
+    expect(searchCatalog('')).toEqual(CATALOG)
+    expect(searchCatalog('   ')).toEqual(CATALOG)
+  })
+
+  it('按标题里的关键字搜', () => {
+    expect(searchCatalog('兰亭').map((s) => s.name)).toEqual(['兰亭序'])
+    expect(searchCatalog('不存在的歌')).toEqual([])
+  })
+
+  it('空格隔开的几个关键字都要命中', () => {
+    const entries = [
+      { name: '烟花易冷', dsl: '', mode: 'jianpu' as const, note: '' },
+      { name: '烟雨', dsl: '', mode: 'jianpu' as const, note: '' },
+    ]
+    expect(searchCatalog('烟', entries)).toHaveLength(2)
+    expect(searchCatalog('烟 冷', entries).map((s) => s.name)).toEqual(['烟花易冷'])
+  })
+
+  it('不分大小写，间隔号和空白不影响', () => {
+    expect(searchCatalog('雪见落入凡尘').map((s) => s.name)).toEqual(['雪见·落入凡尘'])
+    const entries = [{ name: 'Fairy Tail', dsl: '', mode: 'jianpu' as const, note: '' }]
+    expect(searchCatalog('fairy', entries)).toHaveLength(1)
+  })
+})
+
 describe('页面能渲染出来（拦一道 JSX / 导入的低级错误）', () => {
   it('谱库页：读盘前先给个「读取中」，不炸', () => {
     const html = renderToStaticMarkup(
@@ -192,6 +229,9 @@ describe('页面能渲染出来（拦一道 JSX / 导入的低级错误）', () 
     expect(html).toContain('示例曲目')
     expect(html).toContain('茉莉花')
     expect(html).toContain('写法示范')
+    expect(html).toContain('曲库')
+    expect(html).toContain('兰亭序')
+    expect(html).toContain('按标题搜索曲库')
     expect(html).toContain('读取中')
   })
 

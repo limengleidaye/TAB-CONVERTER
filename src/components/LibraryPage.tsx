@@ -6,11 +6,12 @@
  * 明写一句「重要的谱子记得导出备份」，这不是客套话。
  */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { buildDsl, splitDsl } from '../core/dsl'
 import { download } from '../export/exporters'
 import { SAMPLES } from '../samples'
+import { CATALOG, searchCatalog, type CatalogEntry } from '../samples/catalog'
 import {
   BLANK_DSL,
   createRecord,
@@ -38,6 +39,8 @@ export function LibraryPage({ onOpenTutorial, onOpen }: LibraryPageProps) {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  const [query, setQuery] = useState('')
+  const found = useMemo(() => searchCatalog(query), [query])
 
   const reload = useCallback(() => {
     listScores()
@@ -195,7 +198,7 @@ export function LibraryPage({ onOpenTutorial, onOpen }: LibraryPageProps) {
           {items === null ? (
             <p className="page-note">读取中…</p>
           ) : items.length === 0 ? (
-            <p className="page-note">还空着。点右上角「新建」，或者从下面的示例曲目抄一首开始改。</p>
+            <p className="page-note">还空着。点右上角「新建」，或者从下面的示例曲目、曲库里抄一首开始改。</p>
           ) : (
             <ul className="score-list">
               {items.map((rec) => (
@@ -228,17 +231,32 @@ export function LibraryPage({ onOpenTutorial, onOpen }: LibraryPageProps) {
           </p>
           <ul className="score-list">
             {SAMPLES.map((s) => (
-              <li key={s.name}>
-                <span className="score-open sample">
-                  <span className="score-title">{s.name}</span>
-                  <span className="score-note">{s.note}</span>
-                </span>
-                <span className="score-actions">
-                  <button onClick={() => void create(s.dsl, s.mode)}>加进我的谱库</button>
-                </span>
-              </li>
+              <SampleRow key={s.name} entry={s} onAdd={() => void create(s.dsl, s.mode)} />
             ))}
           </ul>
+        </section>
+
+        <section>
+          <div className="section-head">
+            <h2>曲库 · {CATALOG.length}</h2>
+            <input
+              className="catalog-search"
+              type="search"
+              value={query}
+              placeholder="按标题搜，如「兰亭」"
+              aria-label="按标题搜索曲库"
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          {found.length === 0 ? (
+            <p className="page-note">曲库里没有标题含「{query.trim()}」的曲子。</p>
+          ) : (
+            <ul className="score-list">
+              {found.map((s) => (
+                <SampleRow key={s.name} entry={s} onAdd={() => void create(s.dsl, s.mode)} />
+              ))}
+            </ul>
+          )}
         </section>
 
         <p className="lib-footnote">
@@ -247,6 +265,21 @@ export function LibraryPage({ onOpenTutorial, onOpen }: LibraryPageProps) {
         </p>
       </main>
     </div>
+  )
+}
+
+/** 示例曲目和曲库共用的一行：标题、说明、「加进我的谱库」 */
+function SampleRow({ entry, onAdd }: { entry: CatalogEntry; onAdd: () => void }) {
+  return (
+    <li>
+      <span className="score-open sample">
+        <span className="score-title">{entry.name}</span>
+        <span className="score-note">{entry.note}</span>
+      </span>
+      <span className="score-actions">
+        <button onClick={onAdd}>加进我的谱库</button>
+      </span>
+    </li>
   )
 }
 
