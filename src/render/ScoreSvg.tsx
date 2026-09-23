@@ -329,17 +329,35 @@ function MeasureView({
         />
       ) : null}
 
+      {/*
+        房子括线：开头那一小节画左钩和数字；接续的小节只画横线，往左接上前一小节的线
+        （换行后落在行首就不往左接）；以 :| 收尾的那一小节在右端下钩。
+      */}
       {m.volta ? (
         <g>
           <path
-            d={`M ${lm.x} ${markY + 4} v -12 h ${lm.width - M.measureGap}`}
+            d={
+              m.voltaStart
+                ? `M ${lm.x} ${markY + 4} v -12 h ${lm.width - M.measureGap}`
+                : `M ${lm.x <= M.marginX ? lm.x : lm.x - M.measureGap} ${markY - 8} H ${lm.x + lm.width - M.measureGap}`
+            }
             fill="none"
             stroke={COLORS.ink}
             strokeWidth={1.4}
           />
-          <text x={lm.x + 5} y={markY + 2} fontFamily={DIGIT_FONT} fontSize={14} fill={COLORS.ink}>
-            {`${m.volta}.`}
-          </text>
+          {m.closeBarline === 'repeatEnd' ? (
+            <path
+              d={`M ${lm.x + lm.width - M.measureGap} ${markY - 8} v 12`}
+              fill="none"
+              stroke={COLORS.ink}
+              strokeWidth={1.4}
+            />
+          ) : null}
+          {m.voltaStart ? (
+            <text x={lm.x + 5} y={markY + 2} fontFamily={DIGIT_FONT} fontSize={14} fill={COLORS.ink}>
+              {`${m.volta}.`}
+            </text>
+          ) : null}
         </g>
       ) : null}
 
@@ -377,6 +395,25 @@ function MeasureView({
             {MARK_GLYPH[mk] ?? mk}
           </text>
         ))}
+
+      {/* 曲中转调：和 Segno / Coda 同一高度，排在房子号和它们后面，免得叠在一起 */}
+      {m.keyChange ? (
+        <text
+          x={
+            lm.x +
+            2 +
+            (m.voltaStart ? 22 : 0) +
+            m.marks.filter((mk) => MARK_AT_START.has(mk)).length * 18
+          }
+          y={markY}
+          fontFamily={DIGIT_FONT}
+          fontSize={15}
+          fontWeight={700}
+          fill={COLORS.ink}
+        >
+          {m.keyChange}
+        </text>
+      ) : null}
 
       {m.openBarline === 'repeatStart' ? <Barline x={lm.x - 8} kind="repeatStart" /> : null}
 

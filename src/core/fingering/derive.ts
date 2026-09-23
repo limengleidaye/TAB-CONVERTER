@@ -5,7 +5,7 @@
  *   index = semitone(音) − semitone(筒音)，查同一张表。
  */
 
-import type { Accidental, NoteEvent } from '../types'
+import type { Accidental, Header, NoteEvent, Score } from '../types'
 import { FINGERING_TABLE, TABLE_LENGTH } from './table'
 
 /** 唱名 1–7 相对本调 do 的半音偏移（大调音阶） */
@@ -35,12 +35,18 @@ export interface FingeringLookup {
   outOfRange: boolean
 }
 
+/**
+ * @param keyShift 曲中转调后，本调 do 相对起始调 do 高了几个半音（见 keyShifts）。
+ *   箫还是那支箫，筒音作X 是按起始调定的；转调后的唱名先折回起始调再查表。
+ */
 export function lookupFingering(
   note: Pick<NoteEvent, 'degree' | 'octave' | 'accidental'>,
   筒音作: number,
   筒音作Acc?: Accidental,
+  keyShift = 0,
 ): FingeringLookup {
-  const index = semitoneOf(note.degree, note.octave, note.accidental) - tongyinSemitone(筒音作, 筒音作Acc)
+  const index =
+    semitoneOf(note.degree, note.octave, note.accidental) + keyShift - tongyinSemitone(筒音作, 筒音作Acc)
   if (index < 0 || index >= TABLE_LENGTH) {
     return { index, holes: null, outOfRange: true }
   }
@@ -102,4 +108,34 @@ export function deriveKeySignature(xiaoKey: string, 筒音作: number, acc?: Acc
   const offset = DEGREE_SEMITONE[筒音作] + accidentalShift(acc)
   const pc = ((tongyin - offset) % 12 + 12) % 12
   return `1=${PITCH_NAME[pc]}`
+}
+
+/** 全曲起始调号：谱头写了 `调号:` 就用它（规范成 ♭/♯），没写再由 箫调 + 筒音作 推 */
+export function startKeyOf(header: Header): string | null {
+  return header.调号
+    ? header.调号.replace(/\s/g, '').replace(/b/g, '♭').replace(/#/g, '♯')
+    : deriveKeySignature(header.箫调, header.筒音作, header.筒音作Accidental)
+}
+
+/**
+ * 各小节（按 score.measures 下标）的调，相对起始调高了几个半音。
+ *
+ * 取**最近**的那个方向，落在 (−6, +6]：1=F 转 1=G 是往上 2 个半音，转 1=♭E 是往下 2 个，
+ * 而不是往上 10 个。简谱的转调几乎都是就近挪，这样前后两段的中音 1 挨在一起，
+ * 播放不会突然跳一个八度，箫的指法也不会整段掉出音域。
+ * 起始调认不出来时没法比，一律按 0。
+ */
+export function keyShifts(score: Score, startKey: string | null): number[] {
+  const base = keySignaturePitchClass(startKey)
+  let shift = 0
+  return score.measures.map((m) => {
+    if (m.keyChange && base !== null) {
+      const pc = keySignaturePitchClass(m.keyChange)
+      if (pc !== null) {
+        const d = (((pc - base) % 12) + 12) % 12
+        shift = d > 6 ? d - 12 : d
+      }
+    }
+    return shift
+  })
 }

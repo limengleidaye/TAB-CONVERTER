@@ -155,6 +155,7 @@ function parseBody(text: string, offset: number, issues: Issue[], initialMeter: 
   /** 当前生效的拍号，以及本小节是不是变拍号的起点 */
   let meter: Meter = initialMeter
   let meterChanged = false
+  let keyChange: string | undefined
 
   // 括号层级：groupStack[L] 为第 L+1 层减时线的分组 id
   const groupStack: number[] = []
@@ -184,6 +185,7 @@ function parseBody(text: string, offset: number, issues: Issue[], initialMeter: 
       volta,
       meter,
       meterChanged,
+      keyChange,
       marks,
       beats: round(beats),
       span: shift([measureStart, end], offset),
@@ -193,6 +195,7 @@ function parseBody(text: string, offset: number, issues: Issue[], initialMeter: 
     volta = undefined
     marks = []
     meterChanged = false
+    keyChange = undefined
     measureStart = end
   }
 
@@ -390,6 +393,18 @@ function parseBody(text: string, offset: number, issues: Issue[], initialMeter: 
         meterChanged = true
         break
 
+      case 'key':
+        // 与变拍号同理：转调作用于整个当前小节
+        if (current.length > 0) {
+          issues.push({
+            severity: 'warning',
+            message: '转调写在了小节中间，已按整小节生效——请写在小节开头',
+            span: shift(tk.span, offset),
+          })
+        }
+        keyChange = tk.key
+        break
+
       case 'volta':
         volta = tk.volta
         break
@@ -429,7 +444,35 @@ function parseBody(text: string, offset: number, issues: Issue[], initialMeter: 
   }
   if (current.length > 0) closeMeasure('single', text.length)
 
+  spreadVoltas(measures)
   return { measures }
+}
+
+/**
+ * 把房子号铺满整个房子。分词时 `[n.` 只落在它开头那一小节上；可一房常常不止一小节，
+ * 只标开头的话，播放走到第二小节就以为「这组房子走完了」，把段首挪到那里，
+ * `:|` 便跳不回真正的段首，第二遍还会把一房的后半截再吹一遍。
+ *
+ * 房子的范围：从 `[n.` 那一小节起，往后到**收尾的 `:|`**（含）。途中先碰到下一个 `[n.`、
+ * `|:` 或终止线，说明这一房没有 `:|` 收尾（通常是最后一房），那就只算开头那一小节——
+ * 它后面的音乐本来就是反复结束后的正文。
+ */
+function spreadVoltas(measures: Measure[]) {
+  for (let i = 0; i < measures.length; i++) {
+    const start = measures[i]
+    if (start.volta === undefined) continue
+    start.voltaStart = true
+    for (let k = i; k < measures.length; k++) {
+      const m = measures[k]
+      if (k > i && (m.volta !== undefined || m.openBarline === 'repeatStart')) break
+      if (m.closeBarline === 'final') break
+      if (m.closeBarline === 'repeatEnd') {
+        for (let j = i + 1; j <= k; j++) measures[j].volta = start.volta
+        i = k
+        break
+      }
+    }
+  }
 }
 
 /**

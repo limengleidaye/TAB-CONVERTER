@@ -3,7 +3,7 @@
  * UI 只消费本模块的输出。
  */
 
-import { deriveKeySignature } from './fingering/derive'
+import { startKeyOf } from './fingering/derive'
 import { layout, type Layout, type LayoutOptions } from './layout'
 import { parse } from './parser'
 import type { Issue, Score } from './types'
@@ -25,9 +25,7 @@ export function compile(src: string, opts: LayoutOptions = {}): CompileResult {
   const semantic = validate(score, { forXiao: !opts.omitFingering })
   const all = [...issues, ...semantic]
 
-  const keySignature = score.header.调号
-    ? score.header.调号.replace(/\s/g, '').replace(/b/g, '♭').replace(/#/g, '♯')
-    : deriveKeySignature(score.header.箫调, score.header.筒音作, score.header.筒音作Accidental)
+  const keySignature = startKeyOf(score.header)
 
   const warnMeasures = new Set<number>()
   for (const issue of all) {

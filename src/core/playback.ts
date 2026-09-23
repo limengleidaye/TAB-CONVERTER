@@ -12,6 +12,7 @@
  */
 
 import {
+  keyShifts,
   keySignaturePitchClass,
   semitoneOf,
   tongyinPitchClass,
@@ -168,6 +169,10 @@ export function buildTimeline(score: Score, layout: Layout, opts: TimelineOption
   const tongyinPc = tongyinPitchClass(score.header.箫调)
   // 简谱模式下箫调/筒音作与音高无关，主音直接从调号取
   const tonicPc = opts.mode === 'jianpu' ? keySignaturePitchClass(layout.keySignature) : null
+  // 曲中转调：简谱口径下主音跟着挪（箫的口径不用管，指法查表时已经折算过）
+  const shiftOf = new Map<number, number>()
+  const shifts = keyShifts(score, layout.keySignature)
+  score.measures.forEach((m, i) => shiftOf.set(m.index, shifts[i]))
   const steps: PlayStep[] = []
   let t = 0
   groups.forEach((g, i) => {
@@ -186,7 +191,12 @@ export function buildTimeline(score: Score, layout: Layout, opts: TimelineOption
       start: t,
       duration,
       bpm: bpms[i],
-      freq: frequencyOf(head.ln.fingering, ev, tongyinPc, tonicPc),
+      freq: frequencyOf(
+        head.ln.fingering,
+        ev,
+        tongyinPc,
+        tonicPc === null ? null : tonicPc + (shiftOf.get(head.measureIndex) ?? 0),
+      ),
       fingering: head.ln.fingering,
       holes: head.ln.showFingering ? (head.ln.fingering?.holes ?? null) : null,
       box: boxOf(g, layout.bands),

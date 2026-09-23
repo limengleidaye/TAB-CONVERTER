@@ -157,6 +157,20 @@ describe('反复展开', () => {
     ])
   })
 
+  it('一房有好几小节时，:| 跳回真正的段首，第二遍整房跳过', () => {
+    // 曾经的 bug：房子号只挂在 [1. 那一小节上，走到一房第二小节就以为房子结束了，
+    // 段首被挪到那里——:| 只跳回一房中间，第二遍还把一房后半截再吹一遍（《假如爱有天意》）
+    const tl = line('|: 1 1 1 1 | 2 2 2 2 | [1. 3 3 3 3 | 4 4 4 4 :| [2. 5 5 5 5 | 6 6 6 6 ||')
+    const seq = tl.steps.map((s) => `${s.ev.degree}/${s.pass}`).filter((v, i, a) => v !== a[i - 1])
+    expect(seq).toEqual(['1/1', '2/1', '3/1', '4/1', '1/2', '2/2', '5/1', '6/1'])
+  })
+
+  it('三房里中间那房也有好几小节', () => {
+    const tl = line('|: 1 1 1 1 | [1. 2 2 2 2 :| [2. 3 3 3 3 | 4 4 4 4 :| [3. 5 5 5 5 | 6 6 6 6 ||')
+    const seq = tl.steps.map((s) => s.ev.degree).filter((v, i, a) => v !== a[i - 1])
+    expect(seq).toEqual([1, 2, 1, 3, 4, 1, 5, 6])
+  })
+
   it('关掉展开就按书写顺序播一遍', () => {
     const r = compile(`标题: 测试\n箫调: G\n筒音作: 2\n拍号: 4/4\n速度: 60\n\n|: 1 2 3 4 :|`)
     const tl = buildTimeline(r.score!, r.layout!, { expandRepeats: false })

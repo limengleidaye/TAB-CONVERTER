@@ -11,7 +11,7 @@
 
 import type { Meter, TempoMark } from './types'
 
-export type CommandCategory = '变速' | '段落' | '拍号'
+export type CommandCategory = '变速' | '段落' | '拍号' | '调号'
 
 export interface DslCommand {
   /** 反斜杠后面的名字 */
@@ -60,6 +60,15 @@ export const DSL_COMMANDS: DslCommand[] = [
     caretOffset: 7,
     selectLength: 3,
   },
+  {
+    name: 'key',
+    insert: '\\key=G',
+    render: '1=G',
+    desc: '曲中转调，写在小节开头',
+    category: '调号',
+    caretOffset: 5,
+    selectLength: 1,
+  },
   { name: 'segno', insert: '\\segno', render: '%', desc: '返回记号（D.S. 跳回这里）', category: '段落' },
   { name: 'coda', insert: '\\coda', render: '⊕', desc: '尾声记号', category: '段落' },
   { name: 'dc', insert: '\\dc', render: 'D.C.', desc: '从头反复', category: '段落' },
@@ -106,6 +115,18 @@ export function parseMeter(raw: string | undefined): Meter | null {
   if (beats < 1 || beats > 32) return null
   if (![1, 2, 4, 8, 16, 32].includes(unit)) return null
   return { beats, unit }
+}
+
+/**
+ * `G` / `bE` / `Eb` / `#C` / `♭B` → 规范写法 `1=G` / `1=♭E` / `1=♯C` / `1=♭B`；写法不对返回 null。
+ * 升降号写在字母前后都认，统一放到前面——简谱习惯写「1=♭E」。
+ */
+export function parseKey(raw: string | undefined): string | null {
+  const t = (raw ?? '').trim().replace(/♭/g, 'b').replace(/♯/g, '#')
+  const m = /^([#b])?([A-Ga-g])([#b])?$/.exec(t)
+  if (!m || (m[1] && m[3])) return null
+  const acc = m[1] ?? m[3] ?? ''
+  return `1=${acc === 'b' ? '♭' : acc === '#' ? '♯' : ''}${m[2].toUpperCase()}`
 }
 
 /** 命令 → 段落记号；不是段落命令则返回 null */

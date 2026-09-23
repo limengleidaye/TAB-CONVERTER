@@ -149,8 +149,11 @@ describe('纯简谱模式', () => {
 })
 
 describe('示例曲目', () => {
-  it('三首：一首讲写法，两首真曲子', () => {
-    expect(SAMPLES.map((s) => s.name)).toEqual(['写法示范', '茉莉花', '送别'])
+  it('一首讲写法、两首箫谱打头，其余是纯简谱', () => {
+    expect(SAMPLES.slice(0, 3).map((s) => s.name)).toEqual(['写法示范', '茉莉花', '送别'])
+    expect(SAMPLES.slice(0, 3).every((s) => s.mode === 'xiao')).toBe(true)
+    expect(SAMPLES.slice(3).every((s) => s.mode === 'jianpu')).toBe(true)
+    expect(new Set(SAMPLES.map((s) => s.name)).size).toBe(SAMPLES.length)
   })
 
   it.each(SAMPLES)('$name：0 错误 0 警告', ({ dsl, mode }) => {

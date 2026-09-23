@@ -85,12 +85,22 @@ export interface Measure {
   openBarline: BarlineKind | null
   /** 小节右侧的线 */
   closeBarline: BarlineKind
-  /** 房子号（[1. [2.） */
+  /**
+   * 房子号（[1. [2.）。房子里的**每一小节**都带：从 `[n.` 那一小节起，到收尾的 `:|` 为止。
+   * 最后一房后面没有 `:|` 可收，只算写 `[n.` 的那一小节（见 spreadVoltas）。
+   */
   volta?: number
+  /** 写着 `[n.` 的那一小节：谱面在这里画房子号的数字和左边的竖钩 */
+  voltaStart?: boolean
   /** 本小节生效的拍号；曲中 \meter 变过之后跟着变（§3.10.1） */
   meter: Meter
   /** 本小节是变拍号的起点：谱面要在小节头画出拍号，校验与打拍也从这里换算 */
   meterChanged: boolean
+  /**
+   * 曲中 \key 转到的调（规范写法，如 `1=♭E`），只在转调的那一小节上有；
+   * 此后各小节沿用，直到下一个 \key。各小节实际落在哪个调由 keyShifts() 推。
+   */
+  keyChange?: string
   marks: SectionMark[]
   /** 实际拍数（四分音符为 1） */
   beats: number

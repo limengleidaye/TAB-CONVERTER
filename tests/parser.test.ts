@@ -221,6 +221,12 @@ describe('小节与结构记号', () => {
     expect(score!.measures[1].volta).toBe(2)
   })
 
+  it('房子号铺满整房：从 [n. 到收尾的 :|；最后一房没有 :| 只算开头那一小节', () => {
+    const { score } = parse(HEAD + '|: 1 2 3 4 | [1. 5 5 5 5 | 6 6 6 6 :| [2. 7 7 7 7 | 1 1 1 1 ||')
+    expect(score!.measures.map((m) => m.volta)).toEqual([undefined, 1, 1, 2, undefined])
+    expect(score!.measures.map((m) => !!m.voltaStart)).toEqual([false, true, false, true, false])
+  })
+
   it('注释被忽略', () => {
     const { score } = parse(HEAD + '// 这行是注释\n1 2 3 4 |')
     expect(score!.measures[0].notes).toHaveLength(4)

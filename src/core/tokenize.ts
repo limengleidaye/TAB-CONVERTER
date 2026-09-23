@@ -3,7 +3,7 @@
  * 头部（键值对）由 parseHeader 单独处理，这里只切正文音符流。
  */
 
-import { findCommand, parseMeter, sectionOf, tempoOf } from './commands'
+import { findCommand, parseKey, parseMeter, sectionOf, tempoOf } from './commands'
 import type { Accidental, Meter, TempoMark } from './types'
 
 export type TokenKind =
@@ -22,6 +22,7 @@ export type TokenKind =
   | 'repeatEnd' // :|
   | 'volta' // [1.  [2.
   | 'meter' // \meter=3/4 曲中变拍号
+  | 'key' // \key=G 曲中转调
   | 'tempo' // 速度=88 / 渐快 / 渐慢 / 原速 / 延长
   | 'section' // D.C. / D.S. / Fine / Coda / %
   | 'fermata' // 自由延长，加在前一个音上
@@ -45,6 +46,8 @@ export interface Token {
   volta?: number
   /* meter */
   meter?: Meter
+  /* key：规范写法，如 `1=♭E` */
+  key?: string
   /* tempo */
   tempo?: TempoMark
   /* section */
@@ -159,8 +162,10 @@ export function tokenize(src: string): TokenizeResult {
 
     // 反斜杠命令：\rit \dc \tempo=88 …
     if (ch === '\\') {
-      // 值部分收成字符串：\tempo=88 要数字，\meter=3/4 要分数，各自校验
-      const m = /^\\([A-Za-z]+)(?:\s*=\s*(\d+(?:\s*\/\s*\d+)?))?/.exec(src.slice(i))
+      // 值部分收成字符串：\tempo=88 要数字，\meter=3/4 要分数，\key=bE 要音名，各自校验
+      const m = /^\\([A-Za-z]+)(?:\s*=\s*(\d+(?:\s*\/\s*\d+)?|[#b♯♭]?[A-Ga-g][#b♯♭]?(?![A-Za-z])))?/.exec(
+        src.slice(i),
+      )
       const cmd = m ? findCommand(m[1]) : undefined
       if (!m || !cmd) {
         const end = m ? i + m[0].length : i + 1
@@ -185,6 +190,19 @@ export function tokenize(src: string): TokenizeResult {
           })
         } else {
           push({ kind: 'meter', span: [i, i + raw.length], raw, meter })
+        }
+        i += raw.length
+        continue
+      }
+      if (cmd.name === 'key') {
+        const key = parseKey(rawValue)
+        if (!key) {
+          errors.push({
+            message: '\\key 要带调名，例如 \\key=G、\\key=bE、\\key=#C',
+            span: [i, i + raw.length],
+          })
+        } else {
+          push({ kind: 'key', span: [i, i + raw.length], raw, key })
         }
         i += raw.length
         continue

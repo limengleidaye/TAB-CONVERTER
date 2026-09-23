@@ -2,8 +2,13 @@
  * 校验（需求文档 §4）。解析期的语法错误已在 parser 里产出，这里补语义层校验。
  */
 
-import { lookupFingering } from './fingering/derive'
-import { deriveKeySignature } from './fingering/derive'
+import {
+  deriveKeySignature,
+  keyShifts,
+  keySignaturePitchClass,
+  lookupFingering,
+  startKeyOf,
+} from './fingering/derive'
 import type { Issue, Score } from './types'
 
 export interface ValidateOptions {
@@ -79,11 +84,12 @@ export function validate(score: Score, opts: ValidateOptions = {}): Issue[] {
     return issues
   }
 
-  // 音域校验：查表 index 越界
-  for (const m of score.measures) {
+  // 音域校验：查表 index 越界。曲中转过调的小节先折回起始调再查
+  const shifts = keyShifts(score, startKeyOf(score.header))
+  score.measures.forEach((m, mi) => {
     for (const n of m.notes) {
       if (n.type !== 'note') continue
-      const hit = lookupFingering(n, 筒音作, 筒音作Accidental)
+      const hit = lookupFingering(n, 筒音作, 筒音作Accidental, shifts[mi])
       if (hit.outOfRange) {
         issues.push({
           severity: 'warning',
@@ -93,15 +99,16 @@ export function validate(score: Score, opts: ValidateOptions = {}): Issue[] {
         })
       }
     }
-  }
+  })
 
   // 调号与 箫调 + 筒音作 的一致性
   const derived = deriveKeySignature(箫调, 筒音作, 筒音作Accidental)
   if (!derived) {
     issues.push({ severity: 'warning', message: `无法识别的「箫调:${箫调}」，调号将不显示` })
   } else if (调号) {
-    const normalized = 调号.replace(/\s/g, '').replace(/b/g, '♭').replace(/#/g, '♯')
-    if (normalized !== derived) {
+    // 按音高比，不按字面比：1=♯C 与 1=♭D 是同一个调
+    const written = keySignaturePitchClass(调号.replace(/\s/g, ''))
+    if (written !== keySignaturePitchClass(derived)) {
       issues.push({
         severity: 'warning',
         message: `「调号:${调号}」与 箫调${箫调} + 筒音作${筒音作} 推导出的 ${derived} 不一致`,

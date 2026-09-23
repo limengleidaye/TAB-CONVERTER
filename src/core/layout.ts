@@ -4,7 +4,7 @@
  * 三行结构（§7）：简谱行 / 歌词行 / 洞洞谱行，随小节整体换行。
  */
 
-import { lookupFingering, type FingeringLookup } from './fingering/derive'
+import { keyShifts, lookupFingering, type FingeringLookup } from './fingering/derive'
 import type { Measure, NoteEvent, Score } from './types'
 
 export const M = {
@@ -277,11 +277,13 @@ export function layout(score: Score, keySignature: string | null, opts: LayoutOp
   const contentW = M.pageW - M.marginX * 2
 
   // ---- 1. 逐音算宽 ----
-  const laidMeasures: LaidMeasure[] = score.measures.map((measure) => {
+  // 曲中转过调的小节，唱名先折回起始调再查指法（箫还是那支箫）
+  const shifts = keyShifts(score, keySignature)
+  const laidMeasures: LaidMeasure[] = score.measures.map((measure, mi) => {
     const notes: LaidNote[] = measure.notes.map((ev) => {
       const fingering =
         ev.type === 'note'
-          ? lookupFingering(ev, score.header.筒音作, score.header.筒音作Accidental)
+          ? lookupFingering(ev, score.header.筒音作, score.header.筒音作Accidental, shifts[mi])
           : null
       const showFingering = !!fingering && !fingering.outOfRange && !ev.tiedFromPrev
       return { ev, x: 0, width: noteWidth(ev, showFingering), fingering, showFingering }
