@@ -31,6 +31,7 @@ import {
 import type { Issue, Score } from '../core/types'
 import { FingeringCard, cardViewBox } from '../render/FingeringCard'
 import { ScoreSvg } from '../render/ScoreSvg'
+import { ScoreMode } from '../store/library'
 
 /**
  * 提前多少秒把音符排进音频时钟。
@@ -151,8 +152,8 @@ function PlayerWindow({
   ambiguousPolicy: AmbiguousPolicy
   onClose: () => void
 }) {
-  const showStrip = mode !== 'jianpu'
-  const instrument = mode === 'jianpu' ? 'piano' : mode
+  const showStrip = mode !== ScoreMode.Jianpu
+  const instrument = mode === ScoreMode.Jianpu ? 'piano' : mode === ScoreMode.Dizi ? 'dizi' : 'xiao'
   const [bpm, setBpm] = useState(() =>
     score.header.速度 && score.header.速度 > 0 ? score.header.速度 : DEFAULT_BPM,
   )
@@ -526,7 +527,7 @@ function PlayerWindow({
 
         <label>
           <input type="checkbox" checked={sound} onChange={(e) => setSound(e.target.checked)} />
-          {mode === 'jianpu' ? '钢琴' : `${layout.instrument.short}声`}
+          {mode === ScoreMode.Jianpu ? '钢琴' : `${layout.instrument.short}声`}
         </label>
         <label>
           <input type="checkbox" checked={metro} onChange={(e) => setMetro(e.target.checked)} />

@@ -10,6 +10,7 @@ import { compile } from '../src/core/pipeline'
 import { buildTimeline } from '../src/core/playback'
 import {
   BLANK_DSL,
+  ScoreMode,
   createRecord,
   parseBundle,
   resolveCollisions,
@@ -32,7 +33,7 @@ describe('谱库：记录', () => {
     const a = createRecord(落了白)
     const b = createRecord(落了白)
     expect(a.id).not.toBe(b.id)
-    expect(a.mode).toBe('xiao')
+    expect(a.mode).toBe(ScoreMode.Xiao)
     expect(a.title).toBe('落了白')
     expect(a.createdAt).toBeLessThanOrEqual(Date.now())
   })
@@ -56,7 +57,7 @@ describe('谱库：记录', () => {
 
 describe('谱库：整库备份', () => {
   it('导出再导入，内容一字不差', () => {
-    const recs = [createRecord(落了白), createRecord('标题: 小曲\n箫调: G\n筒音作: 2\n拍号: 4/4\n\n1 2 |', 'jianpu')]
+    const recs = [createRecord(落了白), createRecord('标题: 小曲\n箫调: G\n筒音作: 2\n拍号: 4/4\n\n1 2 |', ScoreMode.Jianpu)]
     const back = parseBundle(serializeBundle(recs))
     expect(back).toEqual(recs)
   })
@@ -66,8 +67,15 @@ describe('谱库：整库备份', () => {
     const back = parseBundle(json)
     expect(back).toHaveLength(1)
     expect(back[0].title).toBe('补出来的')
-    expect(back[0].mode).toBe('xiao')
+    expect(back[0].mode).toBe(ScoreMode.Xiao)
     expect(back[0].id).toBeTruthy()
+  })
+
+  it('旧备份的字符串谱面类型读成数字枚举', () => {
+    const scores = ['xiao', 'dizi', 'jianpu'].map((mode) => ({ dsl: '标题: 旧谱\n\n1 |', mode }))
+    expect(parseBundle(JSON.stringify({ scores })).map((rec) => rec.mode)).toEqual([
+      ScoreMode.Xiao, ScoreMode.Dizi, ScoreMode.Jianpu,
+    ])
   })
 
   it('不是备份文件就明确报错', () => {
@@ -105,7 +113,7 @@ describe('纯简谱模式', () => {
   it('音高只看调号：中音 1 落在中央 C', () => {
     const src = '标题: 测试\n调号: 1=C\n箫调: G\n筒音作: 2\n拍号: 4/4\n速度: 60\n\n1 2 3 4 |'
     const r = compile(src, { omitFingering: true })
-    const tl = buildTimeline(r.score!, r.layout!, { mode: 'jianpu' })
+    const tl = buildTimeline(r.score!, r.layout!, { mode: ScoreMode.Jianpu })
     expect(tl.steps[0].freq!).toBeCloseTo(261.63, 1) // C4
     expect(tl.steps[1].freq!).toBeCloseTo(293.66, 1) // D4
   })
@@ -113,7 +121,7 @@ describe('纯简谱模式', () => {
   it('换个调号，整体跟着移调', () => {
     const src = '标题: 测试\n调号: 1=D\n箫调: G\n筒音作: 2\n拍号: 4/4\n速度: 60\n\n1 2 3 4 |'
     const r = compile(src, { omitFingering: true })
-    const tl = buildTimeline(r.score!, r.layout!, { mode: 'jianpu' })
+    const tl = buildTimeline(r.score!, r.layout!, { mode: ScoreMode.Jianpu })
     expect(tl.steps[0].freq!).toBeCloseTo(293.66, 1) // D4
   })
 
@@ -152,12 +160,12 @@ describe('纯简谱模式', () => {
 describe('示例曲目', () => {
   it('三首：一首讲写法，两首箫谱', () => {
     expect(SAMPLES.map((s) => s.name)).toEqual(['写法示范', '茉莉花', '送别'])
-    expect(SAMPLES.every((s) => s.mode === 'xiao')).toBe(true)
+    expect(SAMPLES.every((s) => s.mode === ScoreMode.Xiao)).toBe(true)
   })
 
   it.each([...SAMPLES, ...CATALOG])('$name：0 错误 0 警告', ({ dsl, mode }) => {
     // 示例是用户打开的第一样东西，左下角不该一上来就是红黄字
-    const r = compile(dsl, { omitFingering: mode === 'jianpu' })
+    const r = compile(dsl, { omitFingering: mode === ScoreMode.Jianpu })
     expect(r.issues).toEqual([])
     expect(r.layout).not.toBeNull()
   })
@@ -183,15 +191,47 @@ describe('示例曲目', () => {
 })
 
 describe('曲库', () => {
-  it('全是纯简谱，曲名不重复，也不和示例曲目撞名', () => {
+  it('笛子练习排在曲库前面，其余曲目是纯简谱，曲名不重复', () => {
     expect(CATALOG.length).toBeGreaterThan(0)
-    expect(CATALOG.every((s) => s.mode === 'jianpu')).toBe(true)
+    expect(CATALOG.slice(0, 10).map((s) => s.name)).toEqual([
+      '长音一', '长音二', '长音三', '长音四', '长音五', '吐音一', '吐音二', '吐音三',
+      '五声音阶一', '五声音阶二',
+    ])
+    expect(CATALOG.slice(0, 10).every((s) => s.mode === ScoreMode.Dizi)).toBe(true)
+    expect(CATALOG.slice(10).every((s) => s.mode === ScoreMode.Jianpu)).toBe(true)
     const names = [...SAMPLES, ...CATALOG].map((s) => s.name)
     expect(new Set(names).size).toBe(names.length)
   })
 
   it('曲名与谱头「标题」一致——搜的是列表上看到的名字，加进谱库后也叫这个', () => {
     for (const s of CATALOG) expect(s.dsl, s.name).toMatch(new RegExp(`^标题: ${s.name}$`, 'm'))
+  })
+
+  it('双吐练习把 T、K 逐个放进音符歌词', () => {
+    for (const s of CATALOG.filter((entry) => entry.name.startsWith('吐音'))) {
+      const first = compile(s.dsl).score!.measures[0].notes.filter((note) => note.type === 'note')
+      expect(first.map((note) => note.lyrics?.[0])).toEqual(
+        first.map((_, index) => (index % 2 === 0 ? 'T' : 'K')),
+      )
+    }
+  })
+
+  it('两首五声音阶分别从全按作 5、全按作 2 录入，后一首接上下一张图', () => {
+    for (const [name, tone, ending] of [
+      ['五声音阶一', 5, 5],
+      ['五声音阶二', 2, 2],
+    ] as const) {
+      const entry = CATALOG.find((s) => s.name === name)!
+      const score = compile(entry.dsl).score!
+      expect(score.header.筒音作).toBe(tone)
+      expect(score.measures).toHaveLength(33)
+      expect(score.measures[32].notes[0].degree).toBe(ending)
+    }
+
+    const second = compile(CATALOG.find((s) => s.name === '五声音阶二')!.dsl).score!
+    expect(second.measures[21].notes.map((note) => note.octave)).toEqual([0, 0, -1, -1, 0, -1, -1, -1])
+    expect(second.measures[24].notes.map((note) => note.octave)).toEqual([-1, -1, -1, -1, -1, -1, -1, 0])
+    expect(second.measures[31].notes.map((note) => note.octave)).toEqual([0, 0, -1, -1, 0, -1, -1, -1])
   })
 
   it('没写关键字就全给', () => {
@@ -206,8 +246,8 @@ describe('曲库', () => {
 
   it('空格隔开的几个关键字都要命中', () => {
     const entries = [
-      { name: '烟花易冷', dsl: '', mode: 'jianpu' as const, note: '' },
-      { name: '烟雨', dsl: '', mode: 'jianpu' as const, note: '' },
+      { name: '烟花易冷', dsl: '', mode: ScoreMode.Jianpu, note: '' },
+      { name: '烟雨', dsl: '', mode: ScoreMode.Jianpu, note: '' },
     ]
     expect(searchCatalog('烟', entries)).toHaveLength(2)
     expect(searchCatalog('烟 冷', entries).map((s) => s.name)).toEqual(['烟花易冷'])
@@ -215,7 +255,7 @@ describe('曲库', () => {
 
   it('不分大小写，间隔号和空白不影响', () => {
     expect(searchCatalog('雪见落入凡尘').map((s) => s.name)).toEqual(['雪见·落入凡尘'])
-    const entries = [{ name: 'Fairy Tail', dsl: '', mode: 'jianpu' as const, note: '' }]
+    const entries = [{ name: 'Fairy Tail', dsl: '', mode: ScoreMode.Jianpu, note: '' }]
     expect(searchCatalog('fairy', entries)).toHaveLength(1)
   })
 })

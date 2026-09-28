@@ -18,7 +18,7 @@ import { M } from '../src/core/layout'
 import { parse } from '../src/core/parser'
 import { compile } from '../src/core/pipeline'
 import { buildTimeline } from '../src/core/playback'
-import { guessMode, instrumentOf, keyLabelOf, normalizeMode } from '../src/store/library'
+import { ScoreMode, guessMode, instrumentOf, keyLabelOf, normalizeMode } from '../src/store/library'
 
 const REPO = join(import.meta.dirname, '..')
 
@@ -170,14 +170,14 @@ describe('笛谱：谱头、校验、排版、播放', () => {
   it('谱头表单往返：笛谱写回「笛调:」，箫谱写回「箫调:」', () => {
     const { fields, body } = splitDsl(D_DIZI)
     expect(fields.箫调).toBe('D')
-    expect(buildDsl(fields, body, keyLabelOf('dizi'))).toContain('笛调: D')
-    expect(buildDsl(fields, body, keyLabelOf('xiao'))).toContain('箫调: D')
+    expect(buildDsl(fields, body, keyLabelOf(ScoreMode.Dizi))).toContain('笛调: D')
+    expect(buildDsl(fields, body, keyLabelOf(ScoreMode.Xiao))).toContain('箫调: D')
   })
 
   it('D 调笛筒音作 5 → 1=D，筒音 A4 = 440Hz', () => {
     const r = compile(D_DIZI, { instrument: DIZI })
     expect(r.layout!.keySignature).toBe('1=D')
-    const tl = buildTimeline(r.score!, r.layout!, { mode: 'dizi' })
+    const tl = buildTimeline(r.score!, r.layout!, { mode: ScoreMode.Dizi })
     expect(tl.steps[0].freq).toBeCloseTo(440, 3)
     // 中音 1 = D5
     expect(tl.steps[1].freq).toBeCloseTo(587.33, 1)
@@ -186,7 +186,7 @@ describe('笛谱：谱头、校验、排版、播放', () => {
   it('同一份谱按箫播，筒音落在箫的音区（G 调箫筒音 D4）', () => {
     const src = D_DIZI.replace('笛调: D', '箫调: G')
     const r = compile(src, { instrument: XIAO })
-    const tl = buildTimeline(r.score!, r.layout!, { mode: 'xiao' })
+    const tl = buildTimeline(r.score!, r.layout!, { mode: ScoreMode.Xiao })
     expect(tl.steps[0].freq).toBeCloseTo(293.66, 1)
   })
 
@@ -215,7 +215,7 @@ describe('笛谱：谱头、校验、排版、播放', () => {
       createElement(PlayerDialog, {
         score: r.score!,
         layout: r.layout!,
-        mode: 'dizi',
+        mode: ScoreMode.Dizi,
         ambiguousPolicy: '闭' as const,
         warnings: [],
         onClose: () => {},
@@ -227,23 +227,25 @@ describe('笛谱：谱头、校验、排版、播放', () => {
 })
 
 describe('谱库：三种谱面类型', () => {
-  it('旧记录只有 xiao / jianpu，认不出的当箫谱', () => {
-    expect(normalizeMode('dizi')).toBe('dizi')
-    expect(normalizeMode('jianpu')).toBe('jianpu')
-    expect(normalizeMode(undefined)).toBe('xiao')
-    expect(normalizeMode('whatever')).toBe('xiao')
+  it('旧字符串模式和新数字模式都能读，认不出的当箫谱', () => {
+    expect(normalizeMode('dizi')).toBe(ScoreMode.Dizi)
+    expect(normalizeMode('jianpu')).toBe(ScoreMode.Jianpu)
+    expect(normalizeMode(ScoreMode.Dizi)).toBe(ScoreMode.Dizi)
+    expect(normalizeMode(ScoreMode.Jianpu)).toBe(ScoreMode.Jianpu)
+    expect(normalizeMode(undefined)).toBe(ScoreMode.Xiao)
+    expect(normalizeMode('whatever')).toBe(ScoreMode.Xiao)
   })
 
   it('导入 .txt 时，谱头写了「笛调:」就当笛谱', () => {
-    expect(guessMode(D_DIZI)).toBe('dizi')
-    expect(guessMode(D_DIZI.replace('笛调', '箫调'))).toBe('xiao')
+    expect(guessMode(D_DIZI)).toBe(ScoreMode.Dizi)
+    expect(guessMode(D_DIZI.replace('笛调', '箫调'))).toBe(ScoreMode.Xiao)
     // 正文里出现「笛调」字样不算
-    expect(guessMode('标题: x\n箫调: G\n筒音作: 5\n拍号: 4/4\n\n笛调: 1 2 |')).toBe('xiao')
+    expect(guessMode('标题: x\n箫调: G\n筒音作: 5\n拍号: 4/4\n\n笛调: 1 2 |')).toBe(ScoreMode.Xiao)
   })
 
   it('模式 → 乐器', () => {
-    expect(instrumentOf('xiao')).toBe(XIAO)
-    expect(instrumentOf('dizi')).toBe(DIZI)
-    expect(instrumentOf('jianpu')).toBeNull()
+    expect(instrumentOf(ScoreMode.Xiao)).toBe(XIAO)
+    expect(instrumentOf(ScoreMode.Dizi)).toBe(DIZI)
+    expect(instrumentOf(ScoreMode.Jianpu)).toBeNull()
   })
 })

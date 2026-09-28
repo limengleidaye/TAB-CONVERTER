@@ -20,6 +20,7 @@ import {
 } from './fingering/derive'
 import { M, type Bands, type LaidMeasure, type LaidNote, type Layout } from './layout'
 import type { Meter, NoteEvent, Score } from './types'
+import { ScoreMode } from '../store/library'
 
 /** 谱头没写 `速度:` 时的兜底 BPM */
 export const DEFAULT_BPM = 72
@@ -95,7 +96,7 @@ export interface Timeline {
  *   八度由乐器定（G 调箫筒音 = D4，D 调笛筒音 = A4），管子取 layout.instrument；
  * - `jianpu`：音高只看调号，中音 1 落在 C4~B4，与乐器无关。
  */
-export type PlayMode = 'xiao' | 'dizi' | 'jianpu'
+export type PlayMode = ScoreMode
 
 export interface TimelineOptions {
   /** 默认按箫 */
@@ -172,7 +173,7 @@ export function buildTimeline(score: Score, layout: Layout, opts: TimelineOption
   const floor = layout.instrument.tongyinFloorMidi
   const tongyinMidi = tongyinPc === null ? null : floor + ((tongyinPc - (floor % 12) + 12) % 12)
   // 简谱模式下箫调/筒音作与音高无关，主音直接从调号取
-  const tonicPc = opts.mode === 'jianpu' ? keySignaturePitchClass(layout.keySignature) : null
+  const tonicPc = opts.mode === ScoreMode.Jianpu ? keySignaturePitchClass(layout.keySignature) : null
   // 曲中转调：简谱口径下主音跟着挪（箫的口径不用管，指法查表时已经折算过）
   const shiftOf = new Map<number, number>()
   const shifts = keyShifts(score, layout.keySignature)
@@ -483,4 +484,3 @@ export function cursorAt(timeline: Timeline, time: number): number {
   if (!st || st.duration <= 0) return i
   return i + Math.min(1, Math.max(0, (time - st.start) / st.duration))
 }
-

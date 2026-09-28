@@ -18,22 +18,27 @@ const DB_VERSION = 1
 const STORE = 'scores'
 
 /** 这首谱子给谁看：箫谱、笛谱（都带洞洞谱），还是纯简谱 */
-export type ScoreMode = 'xiao' | 'dizi' | 'jianpu'
+export enum ScoreMode {
+  Xiao = 0,
+  Dizi = 1,
+  Jianpu = 2,
+}
 
 export const MODE_LABEL: Readonly<Record<ScoreMode, string>> = {
-  xiao: '箫谱',
-  dizi: '笛谱',
-  jianpu: '纯简谱',
+  [ScoreMode.Xiao]: '箫谱',
+  [ScoreMode.Dizi]: '笛谱',
+  [ScoreMode.Jianpu]: '纯简谱',
 }
 
 /** 这个模式要画哪支管子的洞洞谱；纯简谱为 null */
 export function instrumentOf(mode: ScoreMode): InstrumentDef | null {
-  return mode === 'jianpu' ? null : INSTRUMENTS[mode]
+  if (mode === ScoreMode.Jianpu) return null
+  return mode === ScoreMode.Dizi ? INSTRUMENTS.dizi : INSTRUMENTS.xiao
 }
 
 /** 谱头「箫调」这一项写成什么：笛谱写「笛调」 */
 export function keyLabelOf(mode: ScoreMode): '箫调' | '笛调' {
-  return mode === 'dizi' ? '笛调' : '箫调'
+  return mode === ScoreMode.Dizi ? '笛调' : '箫调'
 }
 
 /**
@@ -41,12 +46,14 @@ export function keyLabelOf(mode: ScoreMode): '箫调' | '笛调' {
  * 纯简谱与箫谱的文本长得一样，分不出来，导进来后在编辑器里切一下即可。
  */
 export function guessMode(dsl: string): ScoreMode {
-  return /^\s*笛调\s*[:：]/m.test(splitSections(dsl).headerText) ? 'dizi' : 'xiao'
+  return /^\s*笛调\s*[:：]/m.test(splitSections(dsl).headerText) ? ScoreMode.Dizi : ScoreMode.Xiao
 }
 
-/** 认不出的一律当箫谱：早先的记录只有 xiao / jianpu 两种 */
+/** 兼容旧备份、旧 IndexedDB 里的字符串模式；认不出的按箫谱处理。 */
 export function normalizeMode(mode: unknown): ScoreMode {
-  return mode === 'jianpu' || mode === 'dizi' ? mode : 'xiao'
+  if (mode === ScoreMode.Dizi || mode === 'dizi') return ScoreMode.Dizi
+  if (mode === ScoreMode.Jianpu || mode === 'jianpu') return ScoreMode.Jianpu
+  return ScoreMode.Xiao
 }
 
 export interface ScoreRecord {
@@ -85,7 +92,7 @@ export function newId(): string {
   return `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
 }
 
-export function createRecord(dsl: string, mode: ScoreMode = 'xiao'): ScoreRecord {
+export function createRecord(dsl: string, mode: ScoreMode = ScoreMode.Xiao): ScoreRecord {
   const now = Date.now()
   return { id: newId(), title: titleOf(dsl), dsl, mode, createdAt: now, updatedAt: now }
 }
@@ -190,7 +197,7 @@ function run<T>(mode: IDBTransactionMode, fn: (store: IDBObjectStore) => IDBRequ
 
 export async function listScores(): Promise<ScoreRecord[]> {
   const all = await run<ScoreRecord[]>('readonly', (s) => s.getAll() as IDBRequest<ScoreRecord[]>)
-  return sortByUpdated(all)
+  return sortByUpdated(all.map((rec) => ({ ...rec, mode: normalizeMode(rec.mode) })))
 }
 
 export async function getScore(id: string): Promise<ScoreRecord | null> {
@@ -198,7 +205,7 @@ export async function getScore(id: string): Promise<ScoreRecord | null> {
     'readonly',
     (s) => s.get(id) as IDBRequest<ScoreRecord | undefined>,
   )
-  return rec ?? null
+  return rec ? { ...rec, mode: normalizeMode(rec.mode) } : null
 }
 
 export async function putScore(rec: ScoreRecord): Promise<void> {

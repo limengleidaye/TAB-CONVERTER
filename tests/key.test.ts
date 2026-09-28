@@ -5,6 +5,7 @@ import { keyShifts } from '../src/core/fingering/derive'
 import { compile } from '../src/core/pipeline'
 import { buildTimeline } from '../src/core/playback'
 import { renderPageSvg } from '../src/export/exporters'
+import { ScoreMode } from '../src/store/library'
 
 /** G 调箫筒音作2 → 起始调 1=C；♩=60 */
 function song(body: string, head = '箫调: G\n筒音作: 2'): string {
@@ -63,7 +64,7 @@ describe('曲中转调', () => {
   it('简谱播放：主音跟着挪', () => {
     const src = `标题: 测试\n调号: 1=F\n箫调: F\n筒音作: 5\n拍号: 4/4\n速度: 60\n\n1 - - - | \\key=G 1 - - - | \\key=bE 1 - - - |`
     const r = compile(src, { omitFingering: true })
-    const tl = buildTimeline(r.score!, r.layout!, { mode: 'jianpu' })
+    const tl = buildTimeline(r.score!, r.layout!, { mode: ScoreMode.Jianpu })
     const freqs = tl.steps.map((s) => s.freq!)
     expect(freqs[0]).toBeCloseTo(349.23, 1) // F4
     expect(freqs[1]).toBeCloseTo(392.0, 1) // G4

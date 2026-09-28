@@ -24,9 +24,9 @@ import {
   keyLabelOf,
   MODE_LABEL,
   putScore,
+  ScoreMode,
   titleOf,
   writeLastOpened,
-  type ScoreMode,
   type ScoreRecord,
 } from '../store/library'
 
@@ -34,9 +34,9 @@ import {
 const AUTOSAVE_DELAY = 700
 
 const MODE_BUTTONS: { mode: ScoreMode; title: string }[] = [
-  { mode: 'xiao', title: '简谱 + 每个音的八孔箫指法' },
-  { mode: 'dizi', title: '简谱 + 每个音的六孔笛指法' },
-  { mode: 'jianpu', title: '只排简谱，不画指法' },
+  { mode: ScoreMode.Xiao, title: '简谱 + 每个音的八孔箫指法' },
+  { mode: ScoreMode.Dizi, title: '简谱 + 每个音的六孔笛指法' },
+  { mode: ScoreMode.Jianpu, title: '只排简谱，不画指法' },
 ]
 
 export interface EditorPageProps {
@@ -52,7 +52,7 @@ export function EditorPage({ id, onOpenTutorial, onGoLibrary }: EditorPageProps)
 
   const [fields, setFields] = useState(EMPTY_FIELDS)
   const [body, setBody] = useState('')
-  const [mode, setMode] = useState<ScoreMode>('xiao')
+  const [mode, setMode] = useState<ScoreMode>(ScoreMode.Xiao)
   const [policy, setPolicy] = useState<AmbiguousPolicy>('闭')
   const [dirty, setDirty] = useState(false)
 
@@ -112,7 +112,7 @@ export function EditorPage({ id, onOpenTutorial, onGoLibrary }: EditorPageProps)
     return () => clearTimeout(timer)
   }, [dsl, mode, record, status])
 
-  const jianpu = mode === 'jianpu'
+  const jianpu = mode === ScoreMode.Jianpu
   const instrument = instrumentOf(mode)
   const result = useMemo(
     () => compile(dsl, instrument ? { instrument } : { omitFingering: true }),
@@ -209,7 +209,7 @@ export function EditorPage({ id, onOpenTutorial, onGoLibrary }: EditorPageProps)
           </div>
 
           {/* 只有箫的表里有「可开可闭」；笛和纯简谱用不上这个开关 */}
-          {mode !== 'xiao' ? null : (
+          {mode !== ScoreMode.Xiao ? null : (
             <label>
               ◎ 可开可闭
               <select value={policy} onChange={(e) => setPolicy(e.target.value as AmbiguousPolicy)}>

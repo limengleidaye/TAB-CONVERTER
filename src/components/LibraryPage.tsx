@@ -28,7 +28,7 @@ import {
   sortByUpdated,
   titleOf,
   MODE_LABEL,
-  type ScoreMode,
+  ScoreMode,
   type ScoreRecord,
 } from '../store/library'
 
@@ -59,7 +59,7 @@ export function LibraryPage({ onOpenTutorial, onOpen }: LibraryPageProps) {
   const fail = (e: unknown) => setError(e instanceof Error ? e.message : String(e))
 
   const create = useCallback(
-    async (dsl: string, mode: ScoreMode = 'xiao') => {
+    async (dsl: string, mode: ScoreMode = ScoreMode.Xiao) => {
       try {
         const rec = createRecord(dsl, mode)
         await putScore(rec)
@@ -208,8 +208,8 @@ export function LibraryPage({ onOpenTutorial, onOpen }: LibraryPageProps) {
                 <li key={rec.id}>
                   <button className="score-open" onClick={() => onOpen(rec.id)}>
                     <span className="score-title">{rec.title}</span>
-                    <span className={`badge ${rec.mode}`}>
-                      {MODE_LABEL[rec.mode] ?? MODE_LABEL.xiao}
+                    <span className="badge" data-mode={rec.mode}>
+                      {MODE_LABEL[rec.mode]}
                     </span>
                     <span className="score-time">{fmtDate(rec.updatedAt)}</span>
                   </button>

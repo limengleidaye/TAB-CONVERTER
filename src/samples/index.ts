@@ -6,7 +6,7 @@
  * 逐格验收用的《落了白》《为爱追寻》在 ./reference.ts，那两首服务于测试，不出现在界面上。
  */
 
-import type { ScoreMode } from '../store/library'
+import { ScoreMode } from '../store/library'
 
 /**
  * 《写法示范》——不是曲子，是把 DSL 的每一类记号各写一行摆出来。
@@ -143,7 +143,7 @@ export const 送别 = `标题: 送别
 `
 
 export const SAMPLES: { name: string; dsl: string; mode: ScoreMode; note: string }[] = [
-  { name: '写法示范', dsl: 写法示范, mode: 'xiao', note: '不是曲子，把各类写法各摆一行' },
-  { name: '茉莉花', dsl: 茉莉花, mode: 'xiao', note: '江苏民歌 · 2/4 · 带歌词' },
-  { name: '送别', dsl: 送别, mode: 'xiao', note: '李叔同词 · 4/4 · 带歌词' },
+  { name: '写法示范', dsl: 写法示范, mode: ScoreMode.Xiao, note: '不是曲子，把各类写法各摆一行' },
+  { name: '茉莉花', dsl: 茉莉花, mode: ScoreMode.Xiao, note: '江苏民歌 · 2/4 · 带歌词' },
+  { name: '送别', dsl: 送别, mode: ScoreMode.Xiao, note: '李叔同词 · 4/4 · 带歌词' },
 ]
