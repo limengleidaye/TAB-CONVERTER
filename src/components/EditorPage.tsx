@@ -32,6 +32,9 @@ import {
 
 /** 改动停手多久之后落盘 */
 const AUTOSAVE_DELAY = 700
+const PREVIEW_ZOOM_MIN = 25
+const PREVIEW_ZOOM_MAX = 200
+const PREVIEW_ZOOM_STEP = 25
 
 const MODE_BUTTONS: { mode: ScoreMode; title: string }[] = [
   { mode: ScoreMode.Xiao, title: '简谱 + 每个音的八孔箫指法' },
@@ -61,6 +64,7 @@ export function EditorPage({ id, onOpenTutorial, onGoLibrary }: EditorPageProps)
   const [watermark, setWatermark] = useState('')
   const [busy, setBusy] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
+  const [previewZoom, setPreviewZoom] = useState(100)
 
   // ---- 读盘 ----
   useEffect(() => {
@@ -262,22 +266,64 @@ export function EditorPage({ id, onOpenTutorial, onGoLibrary }: EditorPageProps)
         </section>
 
         <section className="preview">
-          {result.score && result.layout ? (
-            result.layout.pages.map((_, i) => (
-              <div className="page" key={i}>
-                <ScoreSvg
-                  score={result.score!}
-                  layout={result.layout!}
-                  pageIndex={i}
-                  watermark={watermark || undefined}
-                  ambiguousPolicy={policy}
-                  warnMeasures={dialogOpen ? undefined : result.warnMeasures}
-                />
-              </div>
-            ))
-          ) : (
-            <p className="empty">谱头有错误，无法渲染</p>
-          )}
+          <div className="preview-toolbar" role="group" aria-label="谱面缩放">
+            <span className="preview-label">谱面预览</span>
+            <button
+              type="button"
+              aria-label="缩小谱面"
+              title="缩小谱面"
+              disabled={!canExport || previewZoom <= PREVIEW_ZOOM_MIN}
+              onClick={() => setPreviewZoom((zoom) => Math.max(PREVIEW_ZOOM_MIN, zoom - PREVIEW_ZOOM_STEP))}
+            >
+              −
+            </button>
+            <output className="preview-zoom" aria-label="当前缩放比例" aria-live="polite">
+              {previewZoom}%
+            </output>
+            <button
+              type="button"
+              aria-label="放大谱面"
+              title="放大谱面"
+              disabled={!canExport || previewZoom >= PREVIEW_ZOOM_MAX}
+              onClick={() => setPreviewZoom((zoom) => Math.min(PREVIEW_ZOOM_MAX, zoom + PREVIEW_ZOOM_STEP))}
+            >
+              +
+            </button>
+            <button
+              type="button"
+              title="恢复到 100%"
+              disabled={!canExport || previewZoom === 100}
+              onClick={() => setPreviewZoom(100)}
+            >
+              重置
+            </button>
+          </div>
+          <div className="preview-pages">
+            {result.score && result.layout ? (
+              result.layout.pages.map((_, i) => (
+                <div
+                  className="page"
+                  key={i}
+                  // 把页间距计入缩放，50% 能并排两页，25% 能并排四页。
+                  style={{
+                    width: `calc(${previewZoom}% - ${24 * (1 - previewZoom / 100)}px)`,
+                    maxWidth: (1200 * previewZoom) / 100,
+                  }}
+                >
+                  <ScoreSvg
+                    score={result.score!}
+                    layout={result.layout!}
+                    pageIndex={i}
+                    watermark={watermark || undefined}
+                    ambiguousPolicy={policy}
+                    warnMeasures={dialogOpen ? undefined : result.warnMeasures}
+                  />
+                </div>
+              ))
+            ) : (
+              <p className="empty">谱头有错误，无法渲染</p>
+            )}
+          </div>
         </section>
       </main>
 
