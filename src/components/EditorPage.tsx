@@ -134,9 +134,13 @@ export function EditorPage({ id, onOpenTutorial, onGoLibrary }: EditorPageProps)
 
   const setField = useCallback(
     (key: HeaderKey, value: string) => {
-      // 换管子的调：谱头 调号 与正文 \key 一起挪，曲中转调的幅度才不变（见 core/transpose.ts）
-      if (key === '箫调') {
-        const next = retuneFields(fields, body, value)
+      // 管调、筒音作都会改变起始调：谱头和正文 \key 必须一起挪。
+      if (key === '箫调' || key === '筒音作') {
+        const next = retuneFields(
+          fields, body,
+          key === '箫调' ? value : fields.箫调,
+          key === '筒音作' ? value : fields.筒音作,
+        )
         setFields(next.fields)
         if (next.body !== body) setBody(next.body)
         return
