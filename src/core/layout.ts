@@ -25,6 +25,10 @@ export const M = {
   /** 简谱行上方预留：变速记号带、弧线带 */
   tempoBand: 16,
   fermataBand: 14,
+  /** tr / 波音 / 花舌那一条带 */
+  ornamentBand: 15,
+  /** 历音那条波浪斜线占的横向宽度 */
+  glissW: 16,
   arcBand: 14,
   topPad: 4,
 
@@ -138,6 +142,8 @@ export interface Bands {
   tempoY: number
   /** 自由延长记号的弧线基线 */
   fermataY: number
+  /** 颤音 / 波音 / 花舌的基线 */
+  ornamentY: number
   /** 弧线（圆滑线/延音线）的两端 y */
   arcY: number
   /** 简谱数字基线 */
@@ -185,6 +191,8 @@ interface ContentExtent {
   maxHighOctave: number
   hasTempo: boolean
   hasFermata: boolean
+  /** 有没有画在数字上方的装饰记号（tr / 波音 / 花舌）；老调用方不传就当没有 */
+  hasOrnament?: boolean
   verseCount: number
 }
 
@@ -194,6 +202,7 @@ function measureExtent(score: Score): ContentExtent {
   let maxHighOctave = 0
   let hasTempo = false
   let hasFermata = false
+  let hasOrnament = false
   let verseCount = 0
 
   for (const m of score.measures) {
@@ -203,6 +212,7 @@ function measureExtent(score: Score): ContentExtent {
       if (n.octave > 0 && n.octave > maxHighOctave) maxHighOctave = n.octave
       if (n.tempoMark) hasTempo = true
       if (n.fermata) hasFermata = true
+      if (n.ornaments?.some((o) => o !== 'glissIn' && o !== 'glissOut')) hasOrnament = true
       if (n.lyrics) verseCount = Math.max(verseCount, n.lyrics.length)
       // 倚音自带八度点，也要算进上方净空
       for (const g of n.graces ?? []) {
@@ -210,7 +220,7 @@ function measureExtent(score: Score): ContentExtent {
       }
     }
   }
-  return { maxBeams, maxLowOctave, maxHighOctave, hasTempo, hasFermata, verseCount }
+  return { maxBeams, maxLowOctave, maxHighOctave, hasTempo, hasFermata, hasOrnament, verseCount }
 }
 
 /** 洞洞谱一列的总高：唱名格 + 各孔格 + 段与段之间的缝 */
@@ -227,12 +237,15 @@ export function computeBands(ext: ContentExtent, omitFingering = false, instrume
   // 两者可以同时落在一个音上，挤在一起就会重叠
   const tempoReserve = ext.hasTempo ? M.tempoBand : 0
   const fermataReserve = ext.hasFermata ? M.fermataBand : 0
+  // 装饰记号压在弧线上方（原谱里 tr 也画在连线外面），同样有才占位
+  const ornamentReserve = ext.hasOrnament ? M.ornamentBand : 0
   const digitBaseline =
-    M.topPad + tempoReserve + fermataReserve + M.arcBand + highDotSpace + M.digitSize
+    M.topPad + tempoReserve + fermataReserve + ornamentReserve + M.arcBand + highDotSpace + M.digitSize
   const digitTop = digitBaseline - M.digitSize
   const arcY = digitTop - highDotSpace - 4
   const tempoY = M.topPad + 12
   const fermataY = M.topPad + tempoReserve + 11
+  const ornamentY = M.topPad + tempoReserve + fermataReserve + 12
 
   // 数字下方：减时线 + 低音点，取更低的那个
   const beamBottom =
@@ -269,6 +282,7 @@ export function computeBands(ext: ContentExtent, omitFingering = false, instrume
   return {
     tempoY,
     fermataY,
+    ornamentY,
     arcY,
     digitBaseline,
     digitsBottom,
@@ -403,6 +417,8 @@ function noteWidth(ev: NoteEvent, showFingering: boolean): number {
   if (longest > 0) w = Math.max(w, longest * (M.lyricSize + 1) + 4)
   if (ev.dotted) w += 8
   if (ev.graces?.length) w += ev.graces.length * 12
+  if (ev.ornaments?.includes('glissIn')) w += M.glissW
+  if (ev.ornaments?.includes('glissOut')) w += M.glissW
   return w
 }
 

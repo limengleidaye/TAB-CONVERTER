@@ -19,6 +19,13 @@ export interface Grace {
   octave: number
 }
 
+/**
+ * 演奏装饰记号：颤音 tr、波音、花舌、历音。
+ * 只画在谱面上，**不改变播放**——合成音色模拟不出这些技巧，硬做反而走样。
+ * glissIn 画在音前（从倚音一路历下来进主音），glissOut 画在音后（音尾历下去）。
+ */
+export type Ornament = 'tr' | 'mordent' | 'flutter' | 'glissIn' | 'glissOut'
+
 export type TempoKind = 'bpm' | 'accel' | 'rit' | 'atempo'
 
 /** 曲中变速记号（§3.9） */
@@ -54,6 +61,8 @@ export interface NoteEvent {
    * 所以和 tempoMark 分开存——否则 \tempo=60 \fermata 落在同一个音上会互相覆盖。
    */
   fermata?: boolean
+  /** 装饰记号，同样加在前一个音上；可叠（`5\\gliss\\tr`） */
+  ornaments?: Ornament[]
   /** 被延音线连到的第二个及之后的同音：不重新起吹、不画指法（§3.5） */
   tiedFromPrev: boolean
   /** 后缀 ~：与下一个音以延音线相连（可跨梁分组、跨小节） */

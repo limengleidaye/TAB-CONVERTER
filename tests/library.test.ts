@@ -191,14 +191,16 @@ describe('示例曲目', () => {
 })
 
 describe('曲库', () => {
-  it('笛子练习排在曲库前面，其余曲目是纯简谱，曲名不重复', () => {
+  it('笛谱排在曲库前面，其余曲目是纯简谱，曲名不重复', () => {
     expect(CATALOG.length).toBeGreaterThan(0)
     expect(CATALOG.slice(0, 10).map((s) => s.name)).toEqual([
       '长音一', '长音二', '长音三', '长音四', '长音五', '吐音一', '吐音二', '吐音三',
       '五声音阶一', '五声音阶二',
     ])
-    expect(CATALOG.slice(0, 10).every((s) => s.mode === ScoreMode.Dizi)).toBe(true)
-    expect(CATALOG.slice(10).every((s) => s.mode === ScoreMode.Jianpu)).toBe(true)
+    // 练习曲之后是笛子曲目，再往后全是纯简谱
+    expect(CATALOG.slice(10, 11).map((s) => s.name)).toEqual(['牵丝戏（和声）'])
+    expect(CATALOG.slice(0, 11).every((s) => s.mode === ScoreMode.Dizi)).toBe(true)
+    expect(CATALOG.slice(11).every((s) => s.mode === ScoreMode.Jianpu)).toBe(true)
     const names = [...SAMPLES, ...CATALOG].map((s) => s.name)
     expect(new Set(names).size).toBe(names.length)
   })

@@ -9,9 +9,9 @@
  * 而且记号得靠记忆硬打。反斜杠既无歧义，又能触发补全面板。
  */
 
-import type { Meter, TempoMark } from './types'
+import type { Meter, Ornament, TempoMark } from './types'
 
-export type CommandCategory = '变速' | '段落' | '拍号' | '调号'
+export type CommandCategory = '变速' | '段落' | '拍号' | '调号' | '装饰'
 
 export interface DslCommand {
   /** 反斜杠后面的名字 */
@@ -50,6 +50,23 @@ export const DSL_COMMANDS: DslCommand[] = [
     render: '𝄐',
     desc: '自由延长，加在前一个音上',
     category: '变速',
+  },
+  { name: 'tr', insert: '\\tr', render: 'tr', desc: '颤音，加在前一个音上（只画不响）', category: '装饰' },
+  { name: 'mordent', insert: '\\mordent', render: '∽', desc: '波音，加在前一个音上（只画不响）', category: '装饰' },
+  { name: 'flutter', insert: '\\flutter', render: '*', desc: '花舌，加在前一个音上（只画不响）', category: '装饰' },
+  {
+    name: 'gliss',
+    insert: '\\gliss',
+    render: '⟍',
+    desc: '历音，画在前一个音的左边、倚音和主音之间（只画不响）',
+    category: '装饰',
+  },
+  {
+    name: 'glissout',
+    insert: '\\glissout',
+    render: '⟍',
+    desc: '音尾历音，画在前一个音或延音线的右边（只画不响）',
+    category: '装饰',
   },
   {
     name: 'meter',
@@ -127,6 +144,24 @@ export function parseKey(raw: string | undefined): string | null {
   if (!m || (m[1] && m[3])) return null
   const acc = m[1] ?? m[3] ?? ''
   return `1=${acc === 'b' ? '♭' : acc === '#' ? '♯' : ''}${m[2].toUpperCase()}`
+}
+
+/** 命令 → 装饰记号；不是装饰命令则返回 null */
+export function ornamentOf(name: string): Ornament | null {
+  switch (name) {
+    case 'tr':
+      return 'tr'
+    case 'mordent':
+      return 'mordent'
+    case 'flutter':
+      return 'flutter'
+    case 'gliss':
+      return 'glissIn'
+    case 'glissout':
+      return 'glissOut'
+    default:
+      return null
+  }
 }
 
 /** 命令 → 段落记号；不是段落命令则返回 null */

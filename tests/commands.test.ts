@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { DSL_COMMANDS, findCommand, matchCommands, sectionOf, tempoOf } from '../src/core/commands'
+import { DSL_COMMANDS, findCommand, matchCommands, ornamentOf, sectionOf, tempoOf } from '../src/core/commands'
 import { compile } from '../src/core/pipeline'
 
 const HEAD = '标题: T\n箫调: G\n筒音作: 2\n拍号: 4/4\n\n'
@@ -36,6 +36,7 @@ describe('命令表', () => {
       const kinds = [
         tempoOf(c.name, 88) !== null,
         sectionOf(c.name) !== null,
+        ornamentOf(c.name) !== null,
         c.name === 'fermata',
         c.name === 'meter',
         c.name === 'key',

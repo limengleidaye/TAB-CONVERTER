@@ -38,6 +38,7 @@ const FALLBACK_BANDS: Bands = {
   digitBaseline: 44,
   digitsBottom: 58,
   fermataY: 16,
+  ornamentY: 16,
   lyricBaselines: [],
   fingeringTop: 72,
   fingerLabelH: M.fingerLabelHBase,
@@ -534,13 +535,19 @@ function NoteGlyph({ ln }: { ln: LaidNote }) {
   const y = bands.digitBaseline
 
   if (ev.type === 'dash') {
-    return <rect x={ln.x - 10} y={y - 11} width={20} height={3.2} fill={COLORS.ink} />
+    return (
+      <g>
+        <rect x={ln.x - 10} y={y - 11} width={20} height={3.2} fill={COLORS.ink} />
+        {ev.ornaments?.length ? <OrnamentGlyphs ev={ev} x={ln.x} halfW={10} /> : null}
+      </g>
+    )
   }
 
   return (
     <g>
       {ev.tempoMark ? <TempoGlyph ev={ev} x={ln.x} /> : null}
       {ev.fermata ? <FermataGlyph x={ln.x} /> : null}
+      {ev.ornaments?.length ? <OrnamentGlyphs ev={ev} x={ln.x} halfW={M.digitHalfW} /> : null}
       {ev.graces?.length ? <GraceGlyphs ev={ev} x={ln.x} /> : null}
 
       {ev.accidental ? (
@@ -648,12 +655,110 @@ function FermataGlyph({ x }: { x: number }) {
   )
 }
 
+/**
+ * 装饰记号。tr / 波音 / 花舌画在数字正上方那条带里，
+ * 历音是一条往右下走的波浪斜线：glissIn 贴着数字左边，glissOut 贴着右边。
+ * 这些都只是谱面记号，播放不受影响。
+ */
+function OrnamentGlyphs({ ev, x, halfW }: { ev: NoteEvent; x: number; halfW: number }) {
+  const bands = useBands()
+  const orn = ev.ornaments!
+  const y = bands.ornamentY
+  const top = bands.digitBaseline - M.digitSize + 4
+  const bottom = bands.digitBaseline - 4
+  // 附点占着数字右边，音尾历音得让开
+  const outX = x + halfW + (ev.dotted ? 12 : 3)
+  // 同一个音上的几个上方记号横着排开，免得叠成一团
+  const above = orn.filter((o) => o === 'tr' || o === 'mordent' || o === 'flutter')
+  const aboveX = (i: number) => x + (i - (above.length - 1) / 2) * 16
+
+  return (
+    <g>
+      {above.map((o, i) =>
+        o === 'tr' ? (
+          <text
+            key={i}
+            x={aboveX(i)}
+            y={y}
+            textAnchor="middle"
+            fontFamily={TEXT_FONT}
+            fontSize={14}
+            fontStyle="italic"
+            fontWeight={700}
+            fill={COLORS.ink}
+          >
+            tr
+          </text>
+        ) : o === 'mordent' ? (
+          <path
+            key={i}
+            d={zigzag(aboveX(i) - 8, y - 4, aboveX(i) + 8, y - 4, 4, 2.6)}
+            fill="none"
+            stroke={COLORS.ink}
+            strokeWidth={1.6}
+            strokeLinejoin="round"
+          />
+        ) : (
+          // 花舌：六芒的星号，自己画——字体里的 * 大小、高低各家不一
+          <g key={i} stroke={COLORS.ink} strokeWidth={1.5} strokeLinecap="round">
+            {[0, 60, 120].map((deg) => {
+              const r = 5
+              const dx = r * Math.cos((deg * Math.PI) / 180)
+              const dy = r * Math.sin((deg * Math.PI) / 180)
+              return (
+                <line key={deg} x1={aboveX(i) - dx} y1={y - 5 - dy} x2={aboveX(i) + dx} y2={y - 5 + dy} />
+              )
+            })}
+          </g>
+        ),
+      )}
+      {orn.includes('glissIn') ? (
+        <path
+          d={zigzag(x - halfW - M.glissW + 1, top, x - halfW - 1, bottom, 4, 2.2)}
+          fill="none"
+          stroke={COLORS.ink}
+          strokeWidth={1.3}
+          strokeLinejoin="round"
+        />
+      ) : null}
+      {orn.includes('glissOut') ? (
+        <path
+          d={zigzag(outX, top, outX + M.glissW - 2, bottom, 4, 2.2)}
+          fill="none"
+          stroke={COLORS.ink}
+          strokeWidth={1.3}
+          strokeLinejoin="round"
+        />
+      ) : null}
+    </g>
+  )
+}
+
+/** 从 (x1,y1) 到 (x2,y2) 的锯齿线：n 个来回，振幅 amp（垂直于走向） */
+function zigzag(x1: number, y1: number, x2: number, y2: number, n: number, amp: number): string {
+  const len = Math.hypot(x2 - x1, y2 - y1)
+  const nx = -(y2 - y1) / len
+  const ny = (x2 - x1) / len
+  const pts = [`M ${x1} ${y1}`]
+  const steps = n * 2
+  for (let k = 1; k < steps; k++) {
+    const t = k / steps
+    const side = k % 2 === 1 ? amp : -amp
+    pts.push(`L ${x1 + (x2 - x1) * t + nx * side} ${y1 + (y2 - y1) * t + ny * side}`)
+  }
+  pts.push(`L ${x2} ${y2}`)
+  return pts.join(' ')
+}
+
 /** 倚音：小号数字 + 双减时线 + 一条连向主音的小弧（§3.6） */
 function GraceGlyphs({ ev, x }: { ev: NoteEvent; x: number }) {
   const bands = useBands()
   const graces = ev.graces!
   const size = 15
   const step = 12
+  // 有前历音时，倚音整体往左让出波浪线的位置，小弧连到波浪线起点
+  const glissShift = ev.ornaments?.includes('glissIn') ? M.glissW : 0
+  x -= glissShift
   const startX = x - M.digitHalfW - 6 - (graces.length - 1) * step
   const y = bands.digitBaseline - 16
 

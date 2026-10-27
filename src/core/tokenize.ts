@@ -3,8 +3,8 @@
  * 头部（键值对）由 parseHeader 单独处理，这里只切正文音符流。
  */
 
-import { findCommand, parseKey, parseMeter, sectionOf, tempoOf } from './commands'
-import type { Accidental, Meter, TempoMark } from './types'
+import { findCommand, ornamentOf, parseKey, parseMeter, sectionOf, tempoOf } from './commands'
+import type { Accidental, Meter, Ornament, TempoMark } from './types'
 
 export type TokenKind =
   | 'note' // 音符 / 休止符
@@ -26,6 +26,7 @@ export type TokenKind =
   | 'tempo' // 速度=88 / 渐快 / 渐慢 / 原速 / 延长
   | 'section' // D.C. / D.S. / Fine / Coda / %
   | 'fermata' // 自由延长，加在前一个音上
+  | 'ornament' // 颤音 / 波音 / 花舌 / 历音，加在前一个音上
 
 export interface Token {
   kind: TokenKind
@@ -52,6 +53,8 @@ export interface Token {
   tempo?: TempoMark
   /* section */
   section?: string
+  /* ornament */
+  ornament?: Ornament
 }
 
 export interface TokenizeResult {
@@ -209,6 +212,12 @@ export function tokenize(src: string): TokenizeResult {
       }
       if (cmd.name === 'fermata') {
         push({ kind: 'fermata', span: [i, i + raw.length], raw })
+        i += raw.length
+        continue
+      }
+      const ornament = ornamentOf(cmd.name)
+      if (ornament) {
+        push({ kind: 'ornament', span: [i, i + raw.length], raw, ornament })
         i += raw.length
         continue
       }

@@ -305,6 +305,31 @@ export const TUTORIAL_SECTIONS: TutorialSection[] = [
   },
 
   {
+    id: 'ornament',
+    title: '　　装饰记号',
+    intro: (
+      <>
+        颤音、波音、花舌、历音都和 <K>\fermata</K> 一样，<b>写在音符后面，加在前一个音上</b>，可以叠着写。
+        它们<b>只画在谱面上，播放时照常吹原音</b>，不模拟这些技巧。
+      </>
+    ),
+    rows: [
+      ['\\tr', 'tr 颤音，标在音符上方'],
+      ['\\mordent', '波音，音符上方一道短波浪'],
+      ['\\flutter', '* 花舌，音符上方的星号'],
+      ['\\gliss', '历音，波浪斜线画在主音左边；配倚音写成 <5>3\\gliss'],
+      ['\\glissout', '音尾历音，画在音符（或延音横线）右边，如 3 - \\glissout'],
+    ],
+    examples: [
+      {
+        body: '3\\tr - <5>1\\gliss - | 2\\mordent 1 6_\\flutter - \\glissout |',
+        caption: '装饰记号只画不响',
+        hideFingering: true,
+      },
+    ],
+  },
+
+  {
     id: 'meter',
     title: '　　变拍号',
     intro: (

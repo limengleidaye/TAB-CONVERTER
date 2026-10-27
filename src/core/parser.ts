@@ -371,6 +371,19 @@ function parseBody(text: string, offset: number, issues: Issue[], initialMeter: 
         break
       }
 
+      case 'ornament': {
+        // 与延长记号一样作用在「前一个事件」上——可以是延音横线，`3 - \\glissout` 就画在横线后面
+        const target = allNotes[allNotes.length - 1]
+        if (target) (target.ornaments ??= []).push(tk.ornament!)
+        else
+          issues.push({
+            severity: 'warning',
+            message: `装饰记号 ${tk.raw} 前面没有音符`,
+            span: shift(tk.span, offset),
+          })
+        break
+      }
+
       case 'tempo':
         // 一个音只能挂一个变速记号；连着写两个多半是笔误
         if (pendingTempo) {
