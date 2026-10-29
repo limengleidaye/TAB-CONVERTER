@@ -161,7 +161,7 @@ export const TUTORIAL_SECTIONS: TutorialSection[] = [
     title: '五、倚音 < >',
     intro: (
       <>
-        写在主音<b>前面</b>，渲染成小号数字加双减时线，再带一条连向主音的小弧线。
+        写在主音<b>前面</b>，渲染成小号数字加双减时线。
         倚音<b>不占时值</b>，也<b>不画指法图</b>。
       </>
     ),

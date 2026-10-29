@@ -750,13 +750,13 @@ function zigzag(x1: number, y1: number, x2: number, y2: number, n: number, amp: 
   return pts.join(' ')
 }
 
-/** 倚音：小号数字 + 双减时线 + 一条连向主音的小弧（§3.6） */
+/** 倚音：小号数字 + 双减时线（§3.6）。不画连向主音的小弧——太小了画出来像个对勾 */
 function GraceGlyphs({ ev, x }: { ev: NoteEvent; x: number }) {
   const bands = useBands()
   const graces = ev.graces!
   const size = 15
   const step = 12
-  // 有前历音时，倚音整体往左让出波浪线的位置，小弧连到波浪线起点
+  // 有前历音时，倚音整体往左让出波浪线的位置
   const glissShift = ev.ornaments?.includes('glissIn') ? M.glissW : 0
   x -= glissShift
   const startX = x - M.digitHalfW - 6 - (graces.length - 1) * step
@@ -787,12 +787,6 @@ function GraceGlyphs({ ev, x }: { ev: NoteEvent; x: number }) {
           </Fragment>
         )
       })}
-      <path
-        d={`M ${startX} ${y + 9} Q ${x - M.digitHalfW - 6} ${y + 15} ${x - M.digitHalfW - 1} ${y + 8}`}
-        fill="none"
-        stroke={COLORS.ink}
-        strokeWidth={1.1}
-      />
     </g>
   )
 }
