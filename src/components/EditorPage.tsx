@@ -65,6 +65,7 @@ export function EditorPage({ id, onOpenTutorial, onGoLibrary }: EditorPageProps)
   const [busy, setBusy] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
   const [previewZoom, setPreviewZoom] = useState(100)
+  const [editorCollapsed, setEditorCollapsed] = useState(false)
 
   // ---- 读盘 ----
   useEffect(() => {
@@ -247,8 +248,9 @@ export function EditorPage({ id, onOpenTutorial, onGoLibrary }: EditorPageProps)
         </div>
       </header>
 
-      <main className="panes">
-        <section className="editor">
+      <main className={editorCollapsed ? 'panes editor-collapsed' : 'panes'}>
+        {/* 收起时只隐藏不卸载，保留正文编辑器的光标和撤销记录 */}
+        <section className="editor" hidden={editorCollapsed}>
           <HeaderForm fields={fields} onChange={setField} derivedKey={derivedKey} instrument={instrument} />
 
           <div className="body-label">正文（音符流）　· 打 \ 弹出命令面板</div>
@@ -270,6 +272,25 @@ export function EditorPage({ id, onOpenTutorial, onGoLibrary }: EditorPageProps)
         </section>
 
         <section className="preview">
+          <button
+            type="button"
+            className="editor-toggle"
+            aria-expanded={!editorCollapsed}
+            aria-label={editorCollapsed ? '展开编辑区' : '收起编辑区'}
+            title={editorCollapsed ? '展开编辑区' : '收起编辑区，谱面占满宽度'}
+            onClick={() => setEditorCollapsed((v) => !v)}
+          >
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+              <path
+                d={editorCollapsed ? 'M5.5 3l5 5-5 5' : 'M10.5 3L5.5 8l5 5'}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
           <div className="preview-toolbar" role="group" aria-label="谱面缩放">
             <span className="preview-label">谱面预览</span>
             <button

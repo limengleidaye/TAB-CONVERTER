@@ -79,6 +79,14 @@ body {
   min-height: 0;
 }
 
+.panes.editor-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.editor[hidden] {
+  display: none;
+}
+
 .editor {
   display: flex;
   flex-direction: column;
@@ -177,10 +185,37 @@ body {
 }
 
 .preview {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+}
+
+/* 贴着预览区左边缘竖直居中；不骑分界线，免得被编辑区滚动条压住 */
+.editor-toggle {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  z-index: 2;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid #ccc;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  cursor: pointer;
+  transform: translate(8px, -50%);
+}
+
+.editor-toggle:hover {
+  color: #222;
+  border-color: #999;
 }
 
 .preview-toolbar {
