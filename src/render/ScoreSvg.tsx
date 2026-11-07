@@ -176,7 +176,7 @@ function HeaderBlock({ score, keySignature }: { score: Score; keySignature: stri
         x={M.pageW / 2}
         y={titleY}
         textAnchor="middle"
-        fontFamily={TEXT_FONT}
+        fontFamily={'"SimHei", "Heiti SC", "STHeiti", "黑体", "Noto Sans SC", "Microsoft YaHei", sans-serif'}
         fontSize={M.titleSize}
         fontWeight={700}
         fill={COLORS.ink}
@@ -206,7 +206,7 @@ function HeaderBlock({ score, keySignature }: { score: Score; keySignature: stri
           x={M.pageW - M.marginX}
           y={lineY}
           textAnchor="end"
-          fontFamily={TEXT_FONT}
+          fontFamily={'"KaiTi", "STKaiti", "Kaiti SC", "楷体", "楷体_GB2312", serif'}
           fontSize={M.subtitleSize}
           fill={COLORS.ink}
         >
@@ -233,28 +233,32 @@ function Footer({ title, pageIndex, pageCount }: { title: string; pageIndex: num
 }
 
 function Watermark({ text }: { text: string }) {
-  const stepX = 420
-  const stepY = 320
-  const cells: JSX.Element[] = []
-  for (let y = -stepY; y < M.pageH + stepY; y += stepY) {
-    for (let x = -stepX; x < M.pageW + stepX; x += stepX) {
-      cells.push(
-        <text
-          key={`${x}-${y}`}
-          x={x}
-          y={y}
-          fontFamily={TEXT_FONT}
-          fontSize={92}
-          fontWeight={700}
-          fill={COLORS.watermark}
-          transform={`rotate(-45 ${x} ${y})`}
-        >
-          {text}
-        </text>,
-      )
-    }
-  }
-  return <g aria-hidden>{cells}</g>
+  const cx = M.pageW / 2
+  const cy = M.pageH / 2
+  const angle = (Math.atan2(M.pageH, M.pageW) * 180) / Math.PI
+  // 长文字缩小以留在纸内；短文字限制字号，避免单个字撑出页面。
+  const units = Array.from(text).reduce((sum, char) => sum + (/^[\x00-\x7F]$/.test(char) ? 0.6 : 1), 0)
+  const length = Math.min(Math.hypot(M.pageW, M.pageH) * 0.82, units * 320)
+
+  return (
+    <g aria-hidden>
+      <text
+        x={cx}
+        y={cy}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontFamily={TEXT_FONT}
+        fontSize={length / units}
+        fontWeight={700}
+        fill={COLORS.watermark}
+        textLength={length}
+        lengthAdjust="spacingAndGlyphs"
+        transform={`rotate(${angle} ${cx} ${cy})`}
+      >
+        {text}
+      </text>
+    </g>
+  )
 }
 
 /* ---------------- 系统（一行谱） ---------------- */
